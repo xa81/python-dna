@@ -98,13 +98,16 @@ else:
 {"result": "OK", "data": {...}}
 
 # Failure
-{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "..."}}
+{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "...",
+                              "GatewayCode": "Dna.DomainService:Domain:10007"}}
 ```
 
 - يكون `Code` بصيغة `API_<HTTP status>` لأخطاء البوابة (`API_400` و `API_404` و `API_429` و `API_500` ...). أما استجابة إعادة التوجيه (بيانات اعتماد خاطئة) فتُعطي `API_302` مع الرسالة `Invalid API credentials`.
+- يُضاف `GatewayCode` إلى أخطاء `API_<status>` عندما ترسل البوابة رمز الخطأ الخاص بها (على سبيل المثال `Dna.DomainService:Domain:10007`)، حتى تتمكن من التمييز بين "النطاق غير موجود" و"TLD غير مدعوم".
 - `Message` هي رسالة البوابة. أما أجسام الأخطاء الفارغة فتصبح `HTTP <status> - <reason>` (على سبيل المثال `HTTP 429 - Too Many Requests`).
-- يحتوي `Details` على تفاصيل البوابة؛ وتُحوَّل أخطاء التحقق إلى قائمة حقول سهلة القراءة، على سبيل المثال `Admin PostalCode, Tech PostalCode - 'PostalCode' is required`.
-- أعطال الشبكة هي أخطاء أيضًا، ولا تكون أبدًا نجاحًا فارغًا: انتهاء المهلة يُرجع `API_28` مع `Could not reach the DomainNameAPI service: the connection timed out. (...)`؛ وأعطال DNS والاتصال و TLS تُرجع `API_6` و `API_7` و `API_35`/`API_60` مع `Curl error during request: ...` (أرقام أخطاء curl، وهي الرموز نفسها التي تُبلغ عنها php-dna).
+- يحتوي `Details` على تفاصيل البوابة (أو نص الاستجابة الخام عند عدم وجودها)؛ وتُحوَّل أخطاء التحقق إلى قائمة حقول سهلة القراءة، على سبيل المثال `Admin PostalCode, Tech PostalCode - 'PostalCode' is required`.
+- أعطال الشبكة هي أخطاء أيضًا، ولا تكون أبدًا نجاحًا فارغًا: انتهاء المهلة يُرجع `CURL_28` مع `Could not reach the DomainNameAPI service: the connection timed out. (...)`؛ وأعطال DNS والاتصال و TLS تُرجع `CURL_6` و `CURL_7` و `CURL_35`/`CURL_60` مع `Curl error during request: ...` (أرقام أخطاء curl، وهي الرموز نفسها التي تُبلغ عنها php-dna). تُستخدم رموز `API_` لحالات HTTP فقط.
+- الرفض خطأ حتى عندما تُجيب البوابة بـ HTTP 200: إذا عاد التسجيل أو النقل أو التجديد بـ `success: false`، تُرجع الدالة `REGISTER_DOMAIN` أو `TRANSFER_DOMAIN` أو `RENEW_DOMAIN` مع رسالة البوابة.
 - تحتفظ الأعلام (flags) بأنواع php-dna: `LockStatus` هو السلسلة النصية `"true"`/`"false"`، والأسعار سلاسل نصية منسّقة (`"11.9900"`).
 
 تستخدم بعض الدوال بنية إرجاع خاصة بها، تمامًا كما في php-dna:
@@ -112,7 +115,7 @@ else:
 | الدالة | عند النجاح | عند الفشل |
 |---|---|---|
 | `check_availability` | قائمة `list` بسيطة من النتائج | بنية `ERROR` |
-| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"` مع `ErrorCode` |
+| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"` مع `ErrorCode` (`API_<status>` أو `CURL_<errno>` أو `BALANCE` لعملة لا يُبلغ عنها الحساب) |
 | `check_transfer` | `result: "OK"` فقط عندما يكون النطاق قابلًا للنقل | `result: "ERROR"` مع `data` و `error` |
 | `is_tr_tld` و `validate_contact` | قيم بسيطة (بدون اتصال بالشبكة) | — |
 
@@ -135,7 +138,7 @@ dna = DomainNameAPI(reseller_id, api_key, os.environ.get("DNA_TEST_MODE", "false
 
 > ℹ️ في الإصدار 1.0.0 لا يزال عنوان Sentry المدمج فارغًا، لأن مشروع Sentry الخاص بـ python-dna لم يُنشأ بعد: **لا يتم إرسال أي شيء** حتى يملأه تحديث للمكتبة، أو حتى تمرّر عنوانك الخاص باستخدام `DomainNameAPI(..., sentry_dsn="https://key@sentry.example.com/1")`.
 
-تُرسَل التقارير من خيط (thread) في الخلفية: فهي لا تُبطئ استدعاءك ولا تعطّله أبدًا. ولا يتم أبدًا الإبلاغ عن الأخطاء المتوقعة كثيرة التكرار (نطاق غير موجود، رصيد غير كافٍ، بيانات اعتماد غير صالحة، ...).
+تُرسَل التقارير من خيط (thread) في الخلفية: فهي لا تُبطئ استدعاءك ولا تعطّله أبدًا. ولا يتم أبدًا الإبلاغ عن الأخطاء المتوقعة كثيرة التكرار (نطاق غير موجود، رصيد غير كافٍ، بيانات اعتماد غير صالحة، لا توجد إعادة توجيه مُعدّة، ...).
 
 **ما يتم إرساله:**
 
@@ -200,7 +203,7 @@ result = dna.get_reseller_details()
  'currency': 'USD',
  'symbol': '$',
  'balances': [{'balance': '601.64', 'currency': 'USD', 'symbol': '$'},
-              {'balance': '1250.5', 'currency': 'TL', 'symbol': 'TL'}]}
+              {'balance': '1250.50', 'currency': 'TL', 'symbol': 'TL'}]}
 ```
 
 </details>
@@ -210,7 +213,7 @@ result = dna.get_reseller_details()
 
 #### الحصول على الرصيد الحالي
 
-الرصيد الحالي بعملة واحدة: USD (افتراضيًا) أو TRY أو EUR أو GBP.
+الرصيد الحالي بعملة واحدة: USD (افتراضيًا) أو TRY. العملة التي لا يُبلغ عنها الحساب (EUR و GBP ...) تُرجع OperationResult FAILED مع ErrorCode BALANCE.
 
 ```python
 result = dna.get_current_balance("USD")
@@ -707,7 +710,7 @@ result = dna.disable_theft_protection_lock("example.com")
 
 #### تعديل خصوصية النطاق
 
-تفعيل حماية خصوصية WHOIS ‏(True) أو إيقافها (False).
+تفعيل حماية خصوصية WHOIS ‏(True) أو إيقافها (False). القيم 1 و"1" و"on" و"true" و"yes" تعني التفعيل أيضًا؛ وأي قيمة أخرى تعني الإيقاف. لا يُرسَل الوسيط reason إلى البوابة.
 
 ```python
 result = dna.modify_privacy_protection_status("example.com", True, "Owner request")
@@ -908,7 +911,7 @@ result = dna.modify_child_name_server("example.com", "ns1.example.com", "192.0.2
 
 #### نقل النطاق
 
-بدء عملية نقل واردة باستخدام رمز EPP/auth الخاص بالنطاق. كما في واجهة (facade) مكتبة php-dna، يُقبل الوسيط الرابع الاختياري (`contacts`) لكنه لا يُرسَل؛ استخدم `dna.client.transfer(domain, code, period, contacts)` لإرسال جهات الاتصال مع عملية النقل.
+بدء عملية نقل واردة باستخدام رمز EPP/auth الخاص بالنطاق. لا تُرسَل جهات الاتصال أبدًا مع النقل (يحمل الطلب دائمًا `"contacts": []`): يتسلّمها المسجّل من المسجّل السابق، لذلك لا تحتوي `transfer` على وسيط لجهات الاتصال. الرفض (`success: false`) يُرجع الخطأ `TRANSFER_DOMAIN`.
 
 ```python
 result = dna.transfer("example.com", "Ab1!xyZ9", 1)
@@ -1035,7 +1038,7 @@ result = dna.reject_transfer("example.com")
 
 - يمكن تمرير الأسماء بالصيغ `"@"` أو `""` أو `"www"` أو `"www.example.com"` أو `"www.example.com."`؛ وتُرسَل على شكل التسمية النسبية التي تتوقعها البوابة. تُرجع `get_resource_records` أسماءً مؤهلة بالكامل (`"www.example.com."`).
 - الأنواع المدعومة: `A` و `AAAA` و `ALIAS` و `CAA` و `CNAME` و `DS` و `MX` و `NAPTR` و `PTR` و `SRV` و `TLSA` و `TXT` (تُرفض الأنواع الأخرى قبل إجراء أي استدعاء). قيمة TTL من 1 إلى 86400 ثانية.
-- تُطبَّق عمليات الكتابة فورًا؛ مرّر `apply=False` لتجهيز عدة تغييرات ثم استدعِ `apply_resource_records` مرة واحدة.
+- تُطبَّق عمليات الكتابة فورًا؛ مرّر `apply=False` لتجهيز عدة تغييرات ثم استدعِ `apply_resource_records` مرة واحدة. إذا فشل التطبيق التلقائي، تُرجع الدالة خطأ التطبيق (يبقى التغيير مُجهّزًا لكنه غير مُفعّل).
 - تفرض البوابة حدًا لمعدل استدعاءات المنطقة، لذا تُبقي المكتبة فاصلًا لا يقل عن ثانية واحدة بين استدعاءات المنطقة (`dna.zone_min_interval`، بالثواني).
 
 
@@ -1221,7 +1224,7 @@ result = dna.add_resource_record("example.com", "www", "A", "192.0.2.5", 300)
 
 ```python
 {'result': 'OK',
- 'data': {'Name': 'www', 'Type': 'a', 'TTL': 300, 'Content': '192.0.2.5'}}
+ 'data': {'Name': 'www', 'Type': 'A', 'TTL': 300, 'Content': '192.0.2.5'}}
 ```
 
 </details>
@@ -1338,7 +1341,7 @@ result = dna.set_forwarding("example.com", "https://www.example.org", "Standard"
 
 #### حذف إعادة التوجيه
 
-إزالة إعادة توجيه URL.
+إزالة إعادة توجيه URL. تكون قيمة Removed هي False (والنتيجة OK) عندما لا يكون هناك أي إعداد.
 
 ```python
 result = dna.delete_forwarding("example.com")
@@ -1348,7 +1351,7 @@ result = dna.delete_forwarding("example.com")
 <summary>مثال على المخرجات</summary>
 
 ```python
-{'result': 'OK', 'data': {'DomainName': 'example.com'}}
+{'result': 'OK', 'data': {'DomainName': 'example.com', 'Removed': True}}
 ```
 
 </details>
@@ -1395,15 +1398,15 @@ result = dna.validate_contact({
 
 ```python
 {'FirstName': 'Jo',
- 'Phone': '12025550100',
+ 'Phone': '2025550100',
  'Country': 'TR',
  'City': 'ISTANBUL',
  'Fax': '2121234567',
  'LastName': 'Isimyok',
  'AddressLine1': 'Addres yok',
- 'State': 'ISTANBUL',
  'ZipCode': '34000',
- 'PhoneCountryCode': '90',
+ 'PhoneCountryCode': '1',
+ 'State': 'ISTANBUL',
  'FaxCountryCode': '90'}
 ```
 
@@ -1454,7 +1457,7 @@ python -m unittest discover -s tests -v
 
 | ملف الاختبار | الوصف |
 |-----------|-------------|
-| `tests/test_conformance.py` | يشغّل جميع حالات اختبار التوافق الـ 126 الخاصة بـ php-dna: الطلبات نفسها على الشبكة، وقيم الإرجاع نفسها |
+| `tests/test_conformance.py` | يشغّل جميع حالات اختبار التوافق الـ 134 الخاصة بـ php-dna: الطلبات نفسها على الشبكة، وقيم الإرجاع نفسها |
 | `tests/test_edge_cases.py` | حالات حدّية إضافية مسجّلة من php-dna (استجابات ومدخلات غير معتادة من البوابة) |
 | `tests/test_http.py` | طبقة HTTP: الترويسات، سلاسل الاستعلام، أجسام JSON، المهل، إعادة التوجيه |
 | `tests/test_errors.py` | ربط أخطاء استجابات البوابة |

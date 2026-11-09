@@ -105,19 +105,26 @@ exceptions for gateway or network problems; check `result` instead:
 {"result": "OK", "data": {...}}
 
 # Failure
-{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "..."}}
+{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "...",
+                              "GatewayCode": "Dna.DomainService:Domain:10007"}}
 ```
 
 - `Code` is `API_<HTTP status>` for gateway errors (`API_400`, `API_404`, `API_429`, `API_500`, ...).
   A redirect answer (wrong credentials) gives `API_302` with the message `Invalid API credentials`.
+- `GatewayCode` is added to `API_<status>` errors when the gateway sent its own error code
+  (for example `Dna.DomainService:Domain:10007`), so you can tell "domain not found" from "TLD not supported".
 - `Message` is the gateway's message. Empty error bodies become `HTTP <status> - <reason>`
   (for example `HTTP 429 - Too Many Requests`).
-- `Details` holds the gateway's details; validation errors are flattened into a readable list of fields,
-  for example `Admin PostalCode, Tech PostalCode - 'PostalCode' is required`.
-- Network failures are errors too, never an empty success: a timeout returns `API_28` with
+- `Details` holds the gateway's details (or the raw response body when there are none); validation errors
+  are flattened into a readable list of fields, for example
+  `Admin PostalCode, Tech PostalCode - 'PostalCode' is required`.
+- Network failures are errors too, never an empty success: a timeout returns `CURL_28` with
   `Could not reach the DomainNameAPI service: the connection timed out. (...)`; DNS, connection and TLS
-  failures return `API_6`, `API_7`, `API_35`/`API_60` with `Curl error during request: ...`
-  (curl error numbers, the same codes php-dna reports).
+  failures return `CURL_6`, `CURL_7`, `CURL_35`/`CURL_60` with `Curl error during request: ...`
+  (curl error numbers, the same codes php-dna reports). `API_` codes are only used for HTTP statuses.
+- A refusal is an error even when the gateway answers HTTP 200: if registration, transfer or renewal comes
+  back with `success: false`, the method returns `REGISTER_DOMAIN`, `TRANSFER_DOMAIN` or `RENEW_DOMAIN`
+  with the gateway's message.
 - Flags keep php-dna's types: `LockStatus` is the string `"true"`/`"false"`, prices are formatted strings
   (`"11.9900"`).
 
@@ -126,7 +133,7 @@ A few methods use their own envelope, exactly as in php-dna:
 | Method | On success | On failure |
 |---|---|---|
 | `check_availability` | a plain `list` of results | the `ERROR` envelope |
-| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"` with `ErrorCode` |
+| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"` with `ErrorCode` (`API_<status>`, `CURL_<errno>`, or `BALANCE` for a currency the account does not report) |
 | `check_transfer` | `result: "OK"` only when the domain is transferable | `result: "ERROR"` with `data` and `error` |
 | `is_tr_tld`, `validate_contact` | plain values (no network) | — |
 
@@ -157,8 +164,8 @@ performance record. This helps DomainNameAPI find and fix problems. Error report
 > pass your own address with `DomainNameAPI(..., sentry_dsn="https://key@sentry.example.com/1")`.
 
 Reports are sent from a background thread: they never slow down or break your call.
-Expected, high-volume errors (domain not found, insufficient balance, invalid credentials, ...) are never
-reported.
+Expected, high-volume errors (domain not found, insufficient balance, invalid credentials, no forwarding
+configured, ...) are never reported.
 
 **What is sent:**
 
@@ -224,7 +231,7 @@ result = dna.get_reseller_details()
  'currency': 'USD',
  'symbol': '$',
  'balances': [{'balance': '601.64', 'currency': 'USD', 'symbol': '$'},
-              {'balance': '1250.5', 'currency': 'TL', 'symbol': 'TL'}]}
+              {'balance': '1250.50', 'currency': 'TL', 'symbol': 'TL'}]}
 ```
 
 </details>
@@ -234,7 +241,7 @@ result = dna.get_reseller_details()
 
 #### Get Current Balance
 
-Current balance in one currency: USD (default), TRY, EUR or GBP.
+Current balance in one currency: USD (default) or TRY. A currency the account does not report (EUR, GBP, ...) returns OperationResult FAILED with ErrorCode BALANCE.
 
 ```python
 result = dna.get_current_balance("USD")
@@ -731,7 +738,7 @@ result = dna.disable_theft_protection_lock("example.com")
 
 #### Modify Domain Privacy
 
-Turn WHOIS privacy protection on (True) or off (False).
+Turn WHOIS privacy protection on (True) or off (False). 1, "1", "on", "true" and "yes" also mean on; anything else means off. The reason argument is not sent to the gateway.
 
 ```python
 result = dna.modify_privacy_protection_status("example.com", True, "Owner request")
@@ -932,7 +939,7 @@ result = dna.modify_child_name_server("example.com", "ns1.example.com", "192.0.2
 
 #### Domain Transfer
 
-Start an incoming transfer with the domain's EPP/auth code. Like php-dna's facade, the optional fourth argument (`contacts`) is accepted but not sent; use `dna.client.transfer(domain, code, period, contacts)` to send contacts with the transfer.
+Start an incoming transfer with the domain's EPP/auth code. Contacts are never sent with a transfer (the request always carries `"contacts": []`): the registrar takes them over from the losing registrar, so `transfer` has no contacts parameter. A refusal (`success: false`) returns a `TRANSFER_DOMAIN` error.
 
 ```python
 result = dna.transfer("example.com", "Ab1!xyZ9", 1)
@@ -1064,7 +1071,8 @@ replaces the whole set, and deleting by one value removes the whole set. The `*_
 - Supported types: `A`, `AAAA`, `ALIAS`, `CAA`, `CNAME`, `DS`, `MX`, `NAPTR`, `PTR`, `SRV`, `TLSA`, `TXT`
   (others are rejected before any call is made). TTL is 1 to 86400 seconds.
 - Writes are applied immediately; pass `apply=False` to stage several changes and call
-  `apply_resource_records` once.
+  `apply_resource_records` once. If the automatic apply fails, the method returns the apply error (the change
+  stays staged but is not live).
 - The gateway rate-limits zone calls, so the library keeps zone calls at least one second apart
   (`dna.zone_min_interval`, in seconds).
 
@@ -1251,7 +1259,7 @@ result = dna.add_resource_record("example.com", "www", "A", "192.0.2.5", 300)
 
 ```python
 {'result': 'OK',
- 'data': {'Name': 'www', 'Type': 'a', 'TTL': 300, 'Content': '192.0.2.5'}}
+ 'data': {'Name': 'www', 'Type': 'A', 'TTL': 300, 'Content': '192.0.2.5'}}
 ```
 
 </details>
@@ -1368,7 +1376,7 @@ result = dna.set_forwarding("example.com", "https://www.example.org", "Standard"
 
 #### Delete Forwarding
 
-Remove URL forwarding.
+Remove URL forwarding. Removed is False (and result OK) when nothing was configured.
 
 ```python
 result = dna.delete_forwarding("example.com")
@@ -1378,7 +1386,7 @@ result = dna.delete_forwarding("example.com")
 <summary>Sample output</summary>
 
 ```python
-{'result': 'OK', 'data': {'DomainName': 'example.com'}}
+{'result': 'OK', 'data': {'DomainName': 'example.com', 'Removed': True}}
 ```
 
 </details>
@@ -1425,15 +1433,15 @@ result = dna.validate_contact({
 
 ```python
 {'FirstName': 'Jo',
- 'Phone': '12025550100',
+ 'Phone': '2025550100',
  'Country': 'TR',
  'City': 'ISTANBUL',
  'Fax': '2121234567',
  'LastName': 'Isimyok',
  'AddressLine1': 'Addres yok',
- 'State': 'ISTANBUL',
  'ZipCode': '34000',
- 'PhoneCountryCode': '90',
+ 'PhoneCountryCode': '1',
+ 'State': 'ISTANBUL',
  'FaxCountryCode': '90'}
 ```
 
@@ -1485,7 +1493,7 @@ python -m unittest discover -s tests -v
 
 | Test file | Description |
 |-----------|-------------|
-| `tests/test_conformance.py` | Runs all 126 php-dna conformance fixtures: same requests on the wire, same return values |
+| `tests/test_conformance.py` | Runs all 134 php-dna conformance fixtures: same requests on the wire, same return values |
 | `tests/test_edge_cases.py` | Extra edge cases recorded from php-dna (unusual gateway responses and inputs) |
 | `tests/test_http.py` | HTTP layer: headers, query strings, JSON bodies, timeouts, redirects |
 | `tests/test_errors.py` | Error mapping of gateway responses |

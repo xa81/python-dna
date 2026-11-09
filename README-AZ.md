@@ -105,19 +105,22 @@ exception **atmırlar**; bunun əvəzinə `result` dəyərini yoxlayın:
 {"result": "OK", "data": {...}}
 
 # Failure
-{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "..."}}
+{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "...",
+                              "GatewayCode": "Dna.DomainService:Domain:10007"}}
 ```
 
 - `Code` gateway xətalarında `API_<HTTP status>` formatındadır (`API_400`, `API_404`, `API_429`, `API_500`, ...).
   Yönləndirmə (redirect) cavabı (səhv API məlumatları) `Invalid API credentials` mesajı ilə `API_302` qaytarır.
+- Gateway öz xəta kodunu göndərdikdə (məsələn, `Dna.DomainService:Domain:10007`) `API_<status>` xətalarına `GatewayCode` əlavə olunur; beləliklə "domen tapılmadı" ilə "TLD dəstəklənmir" xətalarını ayırd edə bilərsiniz.
 - `Message` gateway-in mesajıdır. Boş xəta gövdələri `HTTP <status> - <reason>` formatına çevrilir
   (məsələn, `HTTP 429 - Too Many Requests`).
-- `Details` gateway-in təfərrüatlarını saxlayır; validasiya xətaları sahələrin oxunaqlı siyahısına çevrilir,
+- `Details` gateway-in təfərrüatlarını (olmadıqda isə xam cavab gövdəsini) saxlayır; validasiya xətaları sahələrin oxunaqlı siyahısına çevrilir,
   məsələn, `Admin PostalCode, Tech PostalCode - 'PostalCode' is required`.
 - Şəbəkə nasazlıqları da xəta kimi qaytarılır, heç vaxt boş uğurlu cavab kimi yox: vaxt aşımı zamanı
-  `Could not reach the DomainNameAPI service: the connection timed out. (...)` mesajı ilə `API_28` qaytarılır; DNS, bağlantı və TLS
-  nasazlıqları `Curl error during request: ...` mesajı ilə `API_6`, `API_7`, `API_35`/`API_60` qaytarır
-  (curl xəta nömrələri, php-dna-nın bildirdiyi kodların eynisi).
+  `Could not reach the DomainNameAPI service: the connection timed out. (...)` mesajı ilə `CURL_28` qaytarılır; DNS, bağlantı və TLS
+  nasazlıqları `Curl error during request: ...` mesajı ilə `CURL_6`, `CURL_7`, `CURL_35`/`CURL_60` qaytarır
+  (curl xəta nömrələri, php-dna-nın bildirdiyi kodların eynisi). `API_` kodları yalnız HTTP statusları üçün istifadə olunur.
+- Gateway HTTP 200 ilə cavab versə belə, imtina xətadır: qeydiyyat, transfer və ya yeniləmə `success: false` ilə qayıdarsa, metod gateway-in mesajı ilə `REGISTER_DOMAIN`, `TRANSFER_DOMAIN` və ya `RENEW_DOMAIN` qaytarır.
 - Bayraqlar php-dna-dakı tiplərini saxlayır: `LockStatus` `"true"`/`"false"` sətir dəyəridir, qiymətlər formatlanmış sətirlərdir
   (`"11.9900"`).
 
@@ -126,7 +129,7 @@ Bir neçə metod php-dna-da olduğu kimi öz cavab strukturundan (envelope) isti
 | Metod | Uğurlu olduqda | Uğursuz olduqda |
 |---|---|---|
 | `check_availability` | nəticələrdən ibarət sadə `list` | `ERROR` strukturu |
-| `get_current_balance` | `OperationResult: "SUCCESS"` | `ErrorCode` ilə birlikdə `OperationResult: "FAILED"` |
+| `get_current_balance` | `OperationResult: "SUCCESS"` | `ErrorCode` (`API_<status>`, `CURL_<errno>` və ya hesabın bildirmədiyi valyuta üçün `BALANCE`) ilə birlikdə `OperationResult: "FAILED"` |
 | `check_transfer` | yalnız domen transfer edilə bildikdə `result: "OK"` | `data` və `error` ilə birlikdə `result: "ERROR"` |
 | `is_tr_tld`, `validate_contact` | sadə dəyərlər (şəbəkə çağırışı yoxdur) | — |
 
@@ -157,7 +160,7 @@ performans qeydi kimi göndərilir. Bu, DomainNameAPI-yə problemləri tapıb d�
 > `DomainNameAPI(..., sentry_dsn="https://key@sentry.example.com/1")` ilə öz ünvanınızı ötürənə qədər **heç nə göndərilmir**.
 
 Hesabatlar arxa fon thread-i vasitəsilə göndərilir: çağırışınızı heç vaxt yavaşlatmır və ya pozmur.
-Gözlənilən, yüksək həcmli xətalar (domen tapılmadı, balans kifayət deyil, yanlış API məlumatları, ...) heç vaxt
+Gözlənilən, yüksək həcmli xətalar (domen tapılmadı, balans kifayət deyil, yanlış API məlumatları, yönləndirmə qurulmayıb, ...) heç vaxt
 bildirilmir.
 
 **Göndərilənlər:**
@@ -224,7 +227,7 @@ result = dna.get_reseller_details()
  'currency': 'USD',
  'symbol': '$',
  'balances': [{'balance': '601.64', 'currency': 'USD', 'symbol': '$'},
-              {'balance': '1250.5', 'currency': 'TL', 'symbol': 'TL'}]}
+              {'balance': '1250.50', 'currency': 'TL', 'symbol': 'TL'}]}
 ```
 
 </details>
@@ -234,7 +237,7 @@ result = dna.get_reseller_details()
 
 #### Cari Balansı Əldə Etmək
 
-Bir valyutada cari balans: USD (standart), TRY, EUR və ya GBP.
+Bir valyutada cari balans: USD (standart) və ya TRY. Hesabın bildirmədiyi valyuta (EUR, GBP, ...) ErrorCode BALANCE ilə OperationResult FAILED qaytarır.
 
 ```python
 result = dna.get_current_balance("USD")
@@ -731,7 +734,7 @@ result = dna.disable_theft_protection_lock("example.com")
 
 #### Domen Məxfiliyi Dəyişdirmə
 
-WHOIS məxfilik qorumasını aktivləşdirin (True) və ya söndürün (False).
+WHOIS məxfilik qorumasını aktivləşdirin (True) və ya söndürün (False). 1, "1", "on", "true" və "yes" də aktiv deməkdir; qalan hər şey söndürülmüş deməkdir. reason arqumenti gateway-ə göndərilmir.
 
 ```python
 result = dna.modify_privacy_protection_status("example.com", True, "Owner request")
@@ -932,7 +935,7 @@ result = dna.modify_child_name_server("example.com", "ns1.example.com", "192.0.2
 
 #### Domen Transferi
 
-Domenin EPP/auth kodu ilə daxil olan transferə başlayın. php-dna-nın facade-ında olduğu kimi, ixtiyari dördüncü arqument (`contacts`) qəbul edilir, lakin göndərilmir; transferlə birlikdə əlaqələri göndərmək üçün `dna.client.transfer(domain, code, period, contacts)` istifadə edin.
+Domenin EPP/auth kodu ilə daxil olan transferə başlayın. Transferlə heç vaxt əlaqə məlumatları göndərilmir (sorğu həmişə `"contacts": []` daşıyır): registrar onları köhnə registrardan götürür, buna görə `transfer` metodunun contacts parametri yoxdur. İmtina (`success: false`) `TRANSFER_DOMAIN` xətası qaytarır.
 
 ```python
 result = dna.transfer("example.com", "Ab1!xyZ9", 1)
@@ -1064,7 +1067,7 @@ bütün dəsti əvəz edir, bir dəyərə görə silmək isə bütün dəsti sil
 - Dəstəklənən tiplər: `A`, `AAAA`, `ALIAS`, `CAA`, `CNAME`, `DS`, `MX`, `NAPTR`, `PTR`, `SRV`, `TLSA`, `TXT`
   (digərləri heç bir çağırış edilmədən rədd edilir). TTL 1-dən 86400 saniyəyə qədərdir.
 - Yazma əməliyyatları dərhal tətbiq olunur; bir neçə dəyişikliyi növbəyə qoymaq üçün `apply=False` ötürün və sonda
-  `apply_resource_records` metodunu bir dəfə çağırın.
+  `apply_resource_records` metodunu bir dəfə çağırın. Avtomatik tətbiq uğursuz olarsa, metod tətbiq xətasını qaytarır (dəyişiklik növbədə qalır, amma aktiv deyil).
 - Gateway zona çağırışlarına sürət limiti (rate limit) tətbiq edir, buna görə kitabxana zona çağırışları arasında ən azı bir saniyə fasilə saxlayır
   (`dna.zone_min_interval`, saniyə ilə).
 
@@ -1251,7 +1254,7 @@ result = dna.add_resource_record("example.com", "www", "A", "192.0.2.5", 300)
 
 ```python
 {'result': 'OK',
- 'data': {'Name': 'www', 'Type': 'a', 'TTL': 300, 'Content': '192.0.2.5'}}
+ 'data': {'Name': 'www', 'Type': 'A', 'TTL': 300, 'Content': '192.0.2.5'}}
 ```
 
 </details>
@@ -1368,7 +1371,7 @@ result = dna.set_forwarding("example.com", "https://www.example.org", "Standard"
 
 #### Yönləndirməni Silmək
 
-URL yönləndirməsini silin.
+URL yönləndirməsini silin. Heç nə qurulmayıbsa, Removed False olur (nəticə yenə OK).
 
 ```python
 result = dna.delete_forwarding("example.com")
@@ -1378,7 +1381,7 @@ result = dna.delete_forwarding("example.com")
 <summary>Nümunə çıxış</summary>
 
 ```python
-{'result': 'OK', 'data': {'DomainName': 'example.com'}}
+{'result': 'OK', 'data': {'DomainName': 'example.com', 'Removed': True}}
 ```
 
 </details>
@@ -1425,15 +1428,15 @@ result = dna.validate_contact({
 
 ```python
 {'FirstName': 'Jo',
- 'Phone': '12025550100',
+ 'Phone': '2025550100',
  'Country': 'TR',
  'City': 'ISTANBUL',
  'Fax': '2121234567',
  'LastName': 'Isimyok',
  'AddressLine1': 'Addres yok',
- 'State': 'ISTANBUL',
  'ZipCode': '34000',
- 'PhoneCountryCode': '90',
+ 'PhoneCountryCode': '1',
+ 'State': 'ISTANBUL',
  'FaxCountryCode': '90'}
 ```
 
@@ -1485,7 +1488,7 @@ python -m unittest discover -s tests -v
 
 | Test faylı | Təsvir |
 |-----------|-------------|
-| `tests/test_conformance.py` | php-dna-nın 126 uyğunluq fixture-unun hamısını işə salır: şəbəkəyə gedən sorğular eyni, qaytarılan dəyərlər eyni |
+| `tests/test_conformance.py` | php-dna-nın 134 uyğunluq fixture-unun hamısını işə salır: şəbəkəyə gedən sorğular eyni, qaytarılan dəyərlər eyni |
 | `tests/test_edge_cases.py` | php-dna-dan qeydə alınmış əlavə kənar hallar (qeyri-adi gateway cavabları və girişlər) |
 | `tests/test_http.py` | HTTP qatı: header-lər, query string-lər, JSON gövdələri, vaxt aşımları, yönləndirmələr |
 | `tests/test_errors.py` | Gateway cavablarının xəta uyğunlaşdırılması |

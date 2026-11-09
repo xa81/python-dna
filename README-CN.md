@@ -98,13 +98,16 @@ else:
 {"result": "OK", "data": {...}}
 
 # Failure
-{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "..."}}
+{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "...",
+                              "GatewayCode": "Dna.DomainService:Domain:10007"}}
 ```
 
 - 对于网关错误，`Code` 为 `API_<HTTP status>`（HTTP 状态码）（`API_400`、`API_404`、`API_429`、`API_500` 等）。重定向响应（凭据错误）会返回 `API_302`，消息为 `Invalid API credentials`。
+- 当网关返回了自己的错误代码（例如 `Dna.DomainService:Domain:10007`）时，`API_<status>` 错误中会额外包含 `GatewayCode`，便于区分“域名未找到”和“不支持该 TLD”等情况。
 - `Message` 为网关返回的消息。错误响应体为空时，会变为 `HTTP <status> - <reason>`（例如 `HTTP 429 - Too Many Requests`）。
-- `Details` 包含网关返回的详细信息；校验错误会被整理成易读的字段列表，例如 `Admin PostalCode, Tech PostalCode - 'PostalCode' is required`。
-- 网络故障同样作为错误返回，绝不会返回空的成功结果：超时返回 `API_28`，消息为 `Could not reach the DomainNameAPI service: the connection timed out. (...)`；DNS、连接和 TLS 故障返回 `API_6`、`API_7`、`API_35`/`API_60`，消息为 `Curl error during request: ...`（即 curl 错误编号，与 php-dna 报告的代码相同）。
+- `Details` 包含网关返回的详细信息（若无则为原始响应正文）；校验错误会被整理成易读的字段列表，例如 `Admin PostalCode, Tech PostalCode - 'PostalCode' is required`。
+- 网络故障同样作为错误返回，绝不会返回空的成功结果：超时返回 `CURL_28`，消息为 `Could not reach the DomainNameAPI service: the connection timed out. (...)`；DNS、连接和 TLS 故障返回 `CURL_6`、`CURL_7`、`CURL_35`/`CURL_60`，消息为 `Curl error during request: ...`（即 curl 错误编号，与 php-dna 报告的代码相同）。 `API_` 代码仅用于 HTTP 状态。
+- 即使网关返回 HTTP 200，拒绝也会作为错误返回：如果注册、转移或续费返回 `success: false`，方法会返回 `REGISTER_DOMAIN`、`TRANSFER_DOMAIN` 或 `RENEW_DOMAIN`，并附带网关的消息。
 - 标志位保留 php-dna 的类型：`LockStatus` 是字符串 `"true"`/`"false"`，价格是格式化后的字符串（`"11.9900"`）。
 
 少数方法使用自己的返回结构，与 php-dna 完全一致：
@@ -112,7 +115,7 @@ else:
 | 方法 | 成功时 | 失败时 |
 |---|---|---|
 | `check_availability` | 结果组成的普通 `list` | `ERROR` 返回结构 |
-| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"`，附带 `ErrorCode` |
+| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"`，附带 `ErrorCode`（`API_<status>`、`CURL_<errno>`，或账户未提供该货币余额时为 `BALANCE`） |
 | `check_transfer` | 仅当域名可转移时为 `result: "OK"` | `result: "ERROR"`，附带 `data` 和 `error` |
 | `is_tr_tld`、`validate_contact` | 普通值（不访问网络） | — |
 
@@ -135,7 +138,7 @@ dna = DomainNameAPI(reseller_id, api_key, os.environ.get("DNA_TEST_MODE", "false
 
 > ℹ️ 在 1.0.0 版本中，内置的 Sentry 地址仍为空，因为 python-dna 的 Sentry 项目尚未创建：在库的后续更新填入该地址之前，或在您通过 `DomainNameAPI(..., sentry_dsn="https://key@sentry.example.com/1")` 传入自己的地址之前，**不会发送任何数据**。
 
-报告通过后台线程发送：绝不会拖慢或中断您的调用。预期内的高频错误（域名未找到、余额不足、凭据无效等）永远不会被报告。
+报告通过后台线程发送：绝不会拖慢或中断您的调用。预期内的高频错误（域名未找到、余额不足、凭据无效、未配置转发等）永远不会被报告。
 
 **发送的内容：**
 
@@ -200,7 +203,7 @@ result = dna.get_reseller_details()
  'currency': 'USD',
  'symbol': '$',
  'balances': [{'balance': '601.64', 'currency': 'USD', 'symbol': '$'},
-              {'balance': '1250.5', 'currency': 'TL', 'symbol': 'TL'}]}
+              {'balance': '1250.50', 'currency': 'TL', 'symbol': 'TL'}]}
 ```
 
 </details>
@@ -210,7 +213,7 @@ result = dna.get_reseller_details()
 
 #### 获取当前余额
 
-以单一货币表示的当前余额：USD（默认）、TRY、EUR 或 GBP。
+以单一货币表示的当前余额：USD（默认）或 TRY。账户未提供的货币（EUR、GBP 等）会返回 OperationResult FAILED，ErrorCode 为 BALANCE。
 
 ```python
 result = dna.get_current_balance("USD")
@@ -707,7 +710,7 @@ result = dna.disable_theft_protection_lock("example.com")
 
 #### 修改域名隐私保护
 
-开启（True）或关闭（False）WHOIS 隐私保护。
+开启（True）或关闭（False）WHOIS 隐私保护。1、"1"、"on"、"true" 和 "yes" 也表示开启；其他任何值都表示关闭。reason 参数不会发送给网关。
 
 ```python
 result = dna.modify_privacy_protection_status("example.com", True, "Owner request")
@@ -908,7 +911,7 @@ result = dna.modify_child_name_server("example.com", "ns1.example.com", "192.0.2
 
 #### 域名转移
 
-使用域名的 EPP/授权码发起转入。与 php-dna 的外观类（facade）一样，可选的第四个参数（`contacts`）会被接受但不会被发送；如需随转移一起发送联系人，请使用 `dna.client.transfer(domain, code, period, contacts)`。
+使用域名的 EPP/授权码发起转入。转移时从不发送联系人（请求始终携带 `"contacts": []`）：联系人由注册商从原注册商处接管，因此 `transfer` 没有 contacts 参数。被拒绝（`success: false`）时返回 `TRANSFER_DOMAIN` 错误。
 
 ```python
 result = dna.transfer("example.com", "Ab1!xyZ9", 1)
@@ -1035,7 +1038,7 @@ result = dna.reject_transfer("example.com")
 
 - 名称可以写作 `"@"`、`""`、`"www"`、`"www.example.com"` 或 `"www.example.com."`；它们会以网关所需的相对标签形式发送。`get_resource_records` 返回的是完全限定名称（`"www.example.com."`）。
 - 支持的类型：`A`、`AAAA`、`ALIAS`、`CAA`、`CNAME`、`DS`、`MX`、`NAPTR`、`PTR`、`SRV`、`TLSA`、`TXT`（其他类型会在发起任何调用之前被拒绝）。TTL 为 1 到 86400 秒。
-- 写入操作会立即生效；传入 `apply=False` 可暂存多项更改，然后调用一次 `apply_resource_records`。
+- 写入操作会立即生效；传入 `apply=False` 可暂存多项更改，然后调用一次 `apply_resource_records`。 如果自动应用失败，方法会返回该应用错误（更改仍处于暂存状态，但未生效）。
 - 网关对区域调用有速率限制，因此本库会让区域调用之间至少间隔一秒（`dna.zone_min_interval`，单位为秒）。
 
 
@@ -1221,7 +1224,7 @@ result = dna.add_resource_record("example.com", "www", "A", "192.0.2.5", 300)
 
 ```python
 {'result': 'OK',
- 'data': {'Name': 'www', 'Type': 'a', 'TTL': 300, 'Content': '192.0.2.5'}}
+ 'data': {'Name': 'www', 'Type': 'A', 'TTL': 300, 'Content': '192.0.2.5'}}
 ```
 
 </details>
@@ -1338,7 +1341,7 @@ result = dna.set_forwarding("example.com", "https://www.example.org", "Standard"
 
 #### 删除转发
 
-删除 URL 转发。
+删除 URL 转发。如果原本未配置任何转发，Removed 为 False（结果仍为 OK）。
 
 ```python
 result = dna.delete_forwarding("example.com")
@@ -1348,7 +1351,7 @@ result = dna.delete_forwarding("example.com")
 <summary>示例输出</summary>
 
 ```python
-{'result': 'OK', 'data': {'DomainName': 'example.com'}}
+{'result': 'OK', 'data': {'DomainName': 'example.com', 'Removed': True}}
 ```
 
 </details>
@@ -1395,15 +1398,15 @@ result = dna.validate_contact({
 
 ```python
 {'FirstName': 'Jo',
- 'Phone': '12025550100',
+ 'Phone': '2025550100',
  'Country': 'TR',
  'City': 'ISTANBUL',
  'Fax': '2121234567',
  'LastName': 'Isimyok',
  'AddressLine1': 'Addres yok',
- 'State': 'ISTANBUL',
  'ZipCode': '34000',
- 'PhoneCountryCode': '90',
+ 'PhoneCountryCode': '1',
+ 'State': 'ISTANBUL',
  'FaxCountryCode': '90'}
 ```
 
@@ -1454,7 +1457,7 @@ python -m unittest discover -s tests -v
 
 | 测试文件 | 说明 |
 |-----------|-------------|
-| `tests/test_conformance.py` | 运行全部 126 个 php-dna 一致性测试用例：线路上的请求相同，返回值也相同 |
+| `tests/test_conformance.py` | 运行全部 134 个 php-dna 一致性测试用例：线路上的请求相同，返回值也相同 |
 | `tests/test_edge_cases.py` | 从 php-dna 记录的额外边界情况（不常见的网关响应和输入） |
 | `tests/test_http.py` | HTTP 层：请求头、查询字符串、JSON 请求体、超时、重定向 |
 | `tests/test_errors.py` | 网关响应的错误映射 |

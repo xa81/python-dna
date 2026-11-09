@@ -105,19 +105,22 @@ netwerkproblemen gooien ze **geen** exceptions; controleer in plaats daarvan `re
 {"result": "OK", "data": {...}}
 
 # Failure
-{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "..."}}
+{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "...",
+                              "GatewayCode": "Dna.DomainService:Domain:10007"}}
 ```
 
 - `Code` is `API_<HTTP-status>` bij gatewayfouten (`API_400`, `API_404`, `API_429`, `API_500`, ...).
   Een redirect-antwoord (verkeerde inloggegevens) levert `API_302` op met de melding `Invalid API credentials`.
+- `GatewayCode` wordt aan `API_<status>`-fouten toegevoegd wanneer de gateway een eigen foutcode heeft meegestuurd (bijvoorbeeld `Dna.DomainService:Domain:10007`), zodat u "domein niet gevonden" kunt onderscheiden van "TLD niet ondersteund".
 - `Message` is de melding van de gateway. Lege foutantwoorden worden `HTTP <status> - <reason>`
   (bijvoorbeeld `HTTP 429 - Too Many Requests`).
-- `Details` bevat de details van de gateway; validatiefouten worden samengevoegd tot een leesbare lijst van velden,
+- `Details` bevat de details van de gateway (of de ruwe response-body als die ontbreken); validatiefouten worden samengevoegd tot een leesbare lijst van velden,
   bijvoorbeeld `Admin PostalCode, Tech PostalCode - 'PostalCode' is required`.
-- Netwerkstoringen zijn ook fouten, nooit een leeg succes: een time-out geeft `API_28` met
+- Netwerkstoringen zijn ook fouten, nooit een leeg succes: een time-out geeft `CURL_28` met
   `Could not reach the DomainNameAPI service: the connection timed out. (...)`; DNS-, verbindings- en TLS-fouten
-  geven `API_6`, `API_7`, `API_35`/`API_60` met `Curl error during request: ...`
-  (curl-foutnummers, dezelfde codes die php-dna rapporteert).
+  geven `CURL_6`, `CURL_7`, `CURL_35`/`CURL_60` met `Curl error during request: ...`
+  (curl-foutnummers, dezelfde codes die php-dna rapporteert). `API_`-codes worden alleen voor HTTP-statussen gebruikt.
+- Een weigering is een fout, ook als de gateway met HTTP 200 antwoordt: komt registratie, transfer of verlenging terug met `success: false`, dan geeft de methode `REGISTER_DOMAIN`, `TRANSFER_DOMAIN` of `RENEW_DOMAIN` met de melding van de gateway.
 - Flags behouden de typen van php-dna: `LockStatus` is de string `"true"`/`"false"`, prijzen zijn opgemaakte strings
   (`"11.9900"`).
 
@@ -126,7 +129,7 @@ Enkele methoden gebruiken hun eigen antwoordformaat, precies zoals in php-dna:
 | Methode | Bij succes | Bij een fout |
 |---|---|---|
 | `check_availability` | een gewone `list` met resultaten | het `ERROR`-formaat |
-| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"` met `ErrorCode` |
+| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"` met `ErrorCode` (`API_<status>`, `CURL_<errno>` of `BALANCE` voor een valuta die het account niet rapporteert) |
 | `check_transfer` | `result: "OK"` alleen als het domein transfereerbaar is | `result: "ERROR"` met `data` en `error` |
 | `is_tr_tld`, `validate_contact` | gewone waarden (geen netwerk) | — |
 
@@ -157,7 +160,7 @@ prestatiegegeven verstuurd. Dit helpt DomainNameAPI problemen te vinden en op te
 > uw eigen adres meegeeft met `DomainNameAPI(..., sentry_dsn="https://key@sentry.example.com/1")`.
 
 Rapporten worden vanuit een achtergrondthread verstuurd: ze vertragen of verstoren uw aanroep nooit.
-Verwachte fouten die vaak voorkomen (domein niet gevonden, onvoldoende saldo, ongeldige inloggegevens, ...) worden nooit
+Verwachte fouten die vaak voorkomen (domein niet gevonden, onvoldoende saldo, ongeldige inloggegevens, geen doorverwijzing ingesteld, ...) worden nooit
 gerapporteerd.
 
 **Wat wordt verstuurd:**
@@ -224,7 +227,7 @@ result = dna.get_reseller_details()
  'currency': 'USD',
  'symbol': '$',
  'balances': [{'balance': '601.64', 'currency': 'USD', 'symbol': '$'},
-              {'balance': '1250.5', 'currency': 'TL', 'symbol': 'TL'}]}
+              {'balance': '1250.50', 'currency': 'TL', 'symbol': 'TL'}]}
 ```
 
 </details>
@@ -234,7 +237,7 @@ result = dna.get_reseller_details()
 
 #### Huidig saldo ophalen
 
-Huidig saldo in één valuta: USD (standaard), TRY, EUR of GBP.
+Huidig saldo in één valuta: USD (standaard) of TRY. Een valuta die het account niet rapporteert (EUR, GBP, ...) geeft OperationResult FAILED met ErrorCode BALANCE.
 
 ```python
 result = dna.get_current_balance("USD")
@@ -731,7 +734,7 @@ result = dna.disable_theft_protection_lock("example.com")
 
 #### Domein Privacy Wijzigen
 
-WHOIS-privacybescherming inschakelen (True) of uitschakelen (False).
+WHOIS-privacybescherming inschakelen (True) of uitschakelen (False). 1, "1", "on", "true" en "yes" betekenen ook aan; al het andere betekent uit. Het argument reason wordt niet naar de gateway gestuurd.
 
 ```python
 result = dna.modify_privacy_protection_status("example.com", True, "Owner request")
@@ -932,7 +935,7 @@ result = dna.modify_child_name_server("example.com", "ns1.example.com", "192.0.2
 
 #### Domein Transfer
 
-Een inkomende transfer starten met de EPP-/auth-code van het domein. Net als bij de facade van php-dna wordt het optionele vierde argument (`contacts`) geaccepteerd maar niet verstuurd; gebruik `dna.client.transfer(domain, code, period, contacts)` om contacten met de transfer mee te sturen.
+Een inkomende transfer starten met de EPP-/auth-code van het domein. Bij een transfer worden nooit contacten meegestuurd (het verzoek bevat altijd `"contacts": []`): de registrar neemt ze over van de vertrekkende registrar, daarom heeft `transfer` geen contacts-parameter. Een weigering (`success: false`) geeft een `TRANSFER_DOMAIN`-fout.
 
 ```python
 result = dna.transfer("example.com", "Ab1!xyZ9", 1)
@@ -1064,7 +1067,7 @@ vervangt de hele set, en verwijderen op basis van één waarde verwijdert de hel
 - Ondersteunde typen: `A`, `AAAA`, `ALIAS`, `CAA`, `CNAME`, `DS`, `MX`, `NAPTR`, `PTR`, `SRV`, `TLSA`, `TXT`
   (andere worden geweigerd voordat er een aanroep wordt gedaan). De TTL is 1 tot 86400 seconden.
 - Schrijfacties worden direct toegepast; geef `apply=False` mee om meerdere wijzigingen klaar te zetten en roep daarna
-  één keer `apply_resource_records` aan.
+  één keer `apply_resource_records` aan. Mislukt het automatisch toepassen, dan geeft de methode die fout terug (de wijziging blijft klaargezet maar is niet live).
 - De gateway beperkt het aantal zone-aanroepen (rate limiting), daarom houdt de bibliotheek minstens één seconde tussen zone-aanroepen
   (`dna.zone_min_interval`, in seconden).
 
@@ -1251,7 +1254,7 @@ result = dna.add_resource_record("example.com", "www", "A", "192.0.2.5", 300)
 
 ```python
 {'result': 'OK',
- 'data': {'Name': 'www', 'Type': 'a', 'TTL': 300, 'Content': '192.0.2.5'}}
+ 'data': {'Name': 'www', 'Type': 'A', 'TTL': 300, 'Content': '192.0.2.5'}}
 ```
 
 </details>
@@ -1368,7 +1371,7 @@ result = dna.set_forwarding("example.com", "https://www.example.org", "Standard"
 
 #### Doorverwijzing verwijderen
 
-URL-doorverwijzing verwijderen.
+URL-doorverwijzing verwijderen. Removed is False (en het resultaat OK) als er niets was ingesteld.
 
 ```python
 result = dna.delete_forwarding("example.com")
@@ -1378,7 +1381,7 @@ result = dna.delete_forwarding("example.com")
 <summary>Voorbeelduitvoer</summary>
 
 ```python
-{'result': 'OK', 'data': {'DomainName': 'example.com'}}
+{'result': 'OK', 'data': {'DomainName': 'example.com', 'Removed': True}}
 ```
 
 </details>
@@ -1425,15 +1428,15 @@ result = dna.validate_contact({
 
 ```python
 {'FirstName': 'Jo',
- 'Phone': '12025550100',
+ 'Phone': '2025550100',
  'Country': 'TR',
  'City': 'ISTANBUL',
  'Fax': '2121234567',
  'LastName': 'Isimyok',
  'AddressLine1': 'Addres yok',
- 'State': 'ISTANBUL',
  'ZipCode': '34000',
- 'PhoneCountryCode': '90',
+ 'PhoneCountryCode': '1',
+ 'State': 'ISTANBUL',
  'FaxCountryCode': '90'}
 ```
 
@@ -1485,7 +1488,7 @@ python -m unittest discover -s tests -v
 
 | Testbestand | Beschrijving |
 |-----------|-------------|
-| `tests/test_conformance.py` | Voert alle 126 conformiteitsfixtures van php-dna uit: dezelfde verzoeken over de lijn, dezelfde retourwaarden |
+| `tests/test_conformance.py` | Voert alle 134 conformiteitsfixtures van php-dna uit: dezelfde verzoeken over de lijn, dezelfde retourwaarden |
 | `tests/test_edge_cases.py` | Extra randgevallen opgenomen uit php-dna (ongebruikelijke gateway-antwoorden en invoer) |
 | `tests/test_http.py` | HTTP-laag: headers, querystrings, JSON-bodies, time-outs, redirects |
 | `tests/test_errors.py` | Foutvertaling van gateway-antwoorden |

@@ -105,19 +105,22 @@ d'exception en cas de problème de passerelle ou de réseau ; vérifiez plutôt 
 {"result": "OK", "data": {...}}
 
 # Failure
-{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "..."}}
+{"result": "ERROR", "error": {"Code": "API_404", "Message": "...", "Details": "...",
+                              "GatewayCode": "Dna.DomainService:Domain:10007"}}
 ```
 
 - `Code` vaut `API_<statut HTTP>` pour les erreurs de la passerelle (`API_400`, `API_404`, `API_429`, `API_500`, ...).
   Une réponse de redirection (identifiants incorrects) donne `API_302` avec le message `Invalid API credentials`.
+- `GatewayCode` est ajouté aux erreurs `API_<status>` lorsque la passerelle a envoyé son propre code d'erreur (par exemple `Dna.DomainService:Domain:10007`), ce qui permet de distinguer « domaine introuvable » de « TLD non pris en charge ».
 - `Message` est le message de la passerelle. Les corps d'erreur vides deviennent `HTTP <status> - <reason>`
   (par exemple `HTTP 429 - Too Many Requests`).
-- `Details` contient les détails fournis par la passerelle ; les erreurs de validation sont aplaties en une liste lisible de champs,
+- `Details` contient les détails fournis par la passerelle (ou le corps brut de la réponse s'il n'y en a pas) ; les erreurs de validation sont aplaties en une liste lisible de champs,
   par exemple `Admin PostalCode, Tech PostalCode - 'PostalCode' is required`.
-- Les pannes réseau sont elles aussi des erreurs, jamais un succès vide : un délai dépassé renvoie `API_28` avec
+- Les pannes réseau sont elles aussi des erreurs, jamais un succès vide : un délai dépassé renvoie `CURL_28` avec
   `Could not reach the DomainNameAPI service: the connection timed out. (...)` ; les échecs DNS, de connexion et TLS
-  renvoient `API_6`, `API_7`, `API_35`/`API_60` avec `Curl error during request: ...`
-  (numéros d'erreur curl, les mêmes codes que ceux renvoyés par php-dna).
+  renvoient `CURL_6`, `CURL_7`, `CURL_35`/`CURL_60` avec `Curl error during request: ...`
+  (numéros d'erreur curl, les mêmes codes que ceux renvoyés par php-dna). Les codes `API_` sont réservés aux statuts HTTP.
+- Un refus est une erreur même lorsque la passerelle répond HTTP 200 : si l'enregistrement, le transfert ou le renouvellement revient avec `success: false`, la méthode renvoie `REGISTER_DOMAIN`, `TRANSFER_DOMAIN` ou `RENEW_DOMAIN` avec le message de la passerelle.
 - Les indicateurs conservent les types de php-dna : `LockStatus` est la chaîne `"true"`/`"false"`, les prix sont des chaînes formatées
   (`"11.9900"`).
 
@@ -126,7 +129,7 @@ Quelques méthodes utilisent leur propre enveloppe, exactement comme dans php-dn
 | Méthode | En cas de succès | En cas d'échec |
 |---|---|---|
 | `check_availability` | une simple `list` de résultats | l'enveloppe `ERROR` |
-| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"` avec `ErrorCode` |
+| `get_current_balance` | `OperationResult: "SUCCESS"` | `OperationResult: "FAILED"` avec `ErrorCode` (`API_<status>`, `CURL_<errno>` ou `BALANCE` pour une devise que le compte ne fournit pas) |
 | `check_transfer` | `result: "OK"` uniquement si le domaine est transférable | `result: "ERROR"` avec `data` et `error` |
 | `is_tr_tld`, `validate_contact` | valeurs simples (sans réseau) | — |
 
@@ -157,7 +160,7 @@ enregistrement de performance. Cela aide DomainNameAPI à trouver et corriger le
 > ne fournissez pas votre propre adresse avec `DomainNameAPI(..., sentry_dsn="https://key@sentry.example.com/1")`.
 
 Les rapports sont envoyés depuis un thread d'arrière-plan : ils ne ralentissent ni n'interrompent jamais votre appel.
-Les erreurs attendues et très fréquentes (domaine introuvable, solde insuffisant, identifiants invalides, ...) ne sont jamais
+Les erreurs attendues et très fréquentes (domaine introuvable, solde insuffisant, identifiants invalides, aucune redirection configurée, ...) ne sont jamais
 signalées.
 
 **Ce qui est envoyé :**
@@ -224,7 +227,7 @@ result = dna.get_reseller_details()
  'currency': 'USD',
  'symbol': '$',
  'balances': [{'balance': '601.64', 'currency': 'USD', 'symbol': '$'},
-              {'balance': '1250.5', 'currency': 'TL', 'symbol': 'TL'}]}
+              {'balance': '1250.50', 'currency': 'TL', 'symbol': 'TL'}]}
 ```
 
 </details>
@@ -234,7 +237,7 @@ result = dna.get_reseller_details()
 
 #### Obtenir le Solde Actuel
 
-Solde actuel dans une devise : USD (par défaut), TRY, EUR ou GBP.
+Solde actuel dans une devise : USD (par défaut) ou TRY. Une devise que le compte ne fournit pas (EUR, GBP, ...) renvoie OperationResult FAILED avec ErrorCode BALANCE.
 
 ```python
 result = dna.get_current_balance("USD")
@@ -731,7 +734,7 @@ result = dna.disable_theft_protection_lock("example.com")
 
 #### Modifier la Protection de la Vie Privée
 
-Active (True) ou désactive (False) la protection de la confidentialité WHOIS.
+Active (True) ou désactive (False) la protection de la confidentialité WHOIS. 1, "1", "on", "true" et "yes" signifient aussi activé ; toute autre valeur signifie désactivé. L'argument reason n'est pas envoyé à la passerelle.
 
 ```python
 result = dna.modify_privacy_protection_status("example.com", True, "Owner request")
@@ -932,7 +935,7 @@ result = dna.modify_child_name_server("example.com", "ns1.example.com", "192.0.2
 
 #### Transfert de Domaine
 
-Lance un transfert entrant avec le code EPP/auth du domaine. Comme dans la façade de php-dna, le quatrième argument facultatif (`contacts`) est accepté mais n'est pas envoyé ; utilisez `dna.client.transfer(domain, code, period, contacts)` pour envoyer les contacts avec le transfert.
+Lance un transfert entrant avec le code EPP/auth du domaine. Aucun contact n'est jamais envoyé avec un transfert (la requête contient toujours `"contacts": []`) : le registraire les reprend du registraire sortant, `transfer` n'a donc pas de paramètre contacts. Un refus (`success: false`) renvoie une erreur `TRANSFER_DOMAIN`.
 
 ```python
 result = dna.transfer("example.com", "Ab1!xyZ9", 1)
@@ -1064,7 +1067,7 @@ remplace l'ensemble entier, et supprimer par une seule valeur supprime l'ensembl
 - Types pris en charge : `A`, `AAAA`, `ALIAS`, `CAA`, `CNAME`, `DS`, `MX`, `NAPTR`, `PTR`, `SRV`, `TLSA`, `TXT`
   (les autres sont rejetés avant tout appel). Le TTL va de 1 à 86400 secondes.
 - Les écritures sont appliquées immédiatement ; passez `apply=False` pour préparer plusieurs modifications puis appelez
-  `apply_resource_records` une seule fois.
+  `apply_resource_records` une seule fois. Si l'application automatique échoue, la méthode renvoie l'erreur d'application (la modification reste préparée mais n'est pas active).
 - La passerelle limite le débit des appels de zone ; la bibliothèque espace donc les appels de zone d'au moins une seconde
   (`dna.zone_min_interval`, en secondes).
 
@@ -1251,7 +1254,7 @@ result = dna.add_resource_record("example.com", "www", "A", "192.0.2.5", 300)
 
 ```python
 {'result': 'OK',
- 'data': {'Name': 'www', 'Type': 'a', 'TTL': 300, 'Content': '192.0.2.5'}}
+ 'data': {'Name': 'www', 'Type': 'A', 'TTL': 300, 'Content': '192.0.2.5'}}
 ```
 
 </details>
@@ -1368,7 +1371,7 @@ result = dna.set_forwarding("example.com", "https://www.example.org", "Standard"
 
 #### Supprimer la Redirection
 
-Supprime la redirection d'URL.
+Supprime la redirection d'URL. Removed vaut False (et le résultat est OK) lorsque rien n'était configuré.
 
 ```python
 result = dna.delete_forwarding("example.com")
@@ -1378,7 +1381,7 @@ result = dna.delete_forwarding("example.com")
 <summary>Exemple de sortie</summary>
 
 ```python
-{'result': 'OK', 'data': {'DomainName': 'example.com'}}
+{'result': 'OK', 'data': {'DomainName': 'example.com', 'Removed': True}}
 ```
 
 </details>
@@ -1425,15 +1428,15 @@ result = dna.validate_contact({
 
 ```python
 {'FirstName': 'Jo',
- 'Phone': '12025550100',
+ 'Phone': '2025550100',
  'Country': 'TR',
  'City': 'ISTANBUL',
  'Fax': '2121234567',
  'LastName': 'Isimyok',
  'AddressLine1': 'Addres yok',
- 'State': 'ISTANBUL',
  'ZipCode': '34000',
- 'PhoneCountryCode': '90',
+ 'PhoneCountryCode': '1',
+ 'State': 'ISTANBUL',
  'FaxCountryCode': '90'}
 ```
 
@@ -1485,7 +1488,7 @@ python -m unittest discover -s tests -v
 
 | Fichier de test | Description |
 |-----------------|-------------|
-| `tests/test_conformance.py` | Exécute les 126 fixtures de conformité de php-dna : mêmes requêtes sur le réseau, mêmes valeurs de retour |
+| `tests/test_conformance.py` | Exécute les 134 fixtures de conformité de php-dna : mêmes requêtes sur le réseau, mêmes valeurs de retour |
 | `tests/test_edge_cases.py` | Cas limites supplémentaires enregistrés depuis php-dna (réponses et entrées inhabituelles de la passerelle) |
 | `tests/test_http.py` | Couche HTTP : en-têtes, chaînes de requête, corps JSON, délais d'attente, redirections |
 | `tests/test_errors.py` | Correspondance des erreurs pour les réponses de la passerelle |
