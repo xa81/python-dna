@@ -36,12 +36,9 @@
     "output": {
         "result": "OK",
         "data": {
-            "NameServers": {
-                "a": " NS1.Example.COM. ",
-                "b": "ns1.example.com",
-                "c": 5,
-                "d": ""
-            }
+            "NameServers": [
+                "ns1.example.com"
+            ]
         }
     },
     "ignore": []

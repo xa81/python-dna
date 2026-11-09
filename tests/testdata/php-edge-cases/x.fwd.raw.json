@@ -25,11 +25,11 @@
         }
     ],
     "output": {
-        "result": "OK",
-        "data": {
-            "Enabled": false,
-            "RedirectAddress": "",
-            "ForwardType": ""
+        "result": "ERROR",
+        "error": {
+            "Code": "API_500",
+            "Message": "Forward NOT FOUND here",
+            "Details": "Forward NOT FOUND here"
         }
     },
     "ignore": []

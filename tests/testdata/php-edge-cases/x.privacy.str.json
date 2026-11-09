@@ -19,7 +19,7 @@
             "query": [],
             "body": {
                 "domainName": "example.com",
-                "privacyStatus": false
+                "privacyStatus": true
             },
             "headers": {
                 "X-API-KEY": "conformance-api-key",
@@ -29,7 +29,7 @@
     ],
     "output": {
         "data": {
-            "PrivacyProtectionStatus": "true"
+            "PrivacyProtectionStatus": true
         },
         "result": "OK"
     },

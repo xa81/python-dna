@@ -32,6 +32,12 @@ def load_fixtures():
 
 FIXTURES = load_fixtures()
 
+# php-dna's transfer() still has an optional contacts argument that its facade
+# never forwards. python-dna has no such parameter at all (transfer never sends
+# contacts), so the fixture passing one runs with the first three arguments;
+# the fixture still checks that the request carries "contacts": [].
+ARG_LIMITS = {"transfer": 3}
+
 
 def run_fixture(fx):
     """Run one fixture; returns a list of problems (empty = pass)."""
@@ -41,7 +47,8 @@ def run_fixture(fx):
     api.zone_min_interval = 0
 
     method = getattr(api, snake(fx["call"]))
-    output = method(*fx["args"])
+    args = fx["args"][:ARG_LIMITS[fx["call"]]] if fx["call"] in ARG_LIMITS else fx["args"]
+    output = method(*args)
 
     problems = []
     if len(transport.requests) != len(fx["requests"]):
@@ -69,7 +76,7 @@ def run_fixture(fx):
 
 class ConformanceTest(unittest.TestCase):
     def test_fixture_count(self):
-        self.assertEqual(len(FIXTURES), 126)
+        self.assertEqual(len(FIXTURES), 134)
 
     def test_all_fixtures(self):
         failures = {}

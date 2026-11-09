@@ -71,6 +71,22 @@ class HeadersAndUrlTest(unittest.TestCase):
         _, query = split_url(t.requests[0].url)
         self.assertEqual(query["Ids"], {"0": "3", "1": "4"})
 
+    def test_transfer_never_sends_contacts(self):
+        t = FakeTransport().push(200, '{"status":"Active","expirationDate":"2030-01-01T00:00:00"}')
+        make(t).transfer("example.com", "code", 1)
+        self.assertEqual(json.loads(t.requests[0].body)["contacts"], [])
+        with self.assertRaises(TypeError):
+            make(FakeTransport()).transfer("example.com", "code", 1, {"Registrant": {}})
+
+    def test_privacy_status_parsing(self):
+        for value, expected in ((True, True), (1, True), ("on", True), (" yes ", True), ("off", False),
+                                (0, False), (None, False), ("", False)):
+            t = FakeTransport().push(200, "")
+            out = make(t).modify_privacy_protection_status("example.com", value, "ignored")
+            body = json.loads(t.requests[0].body)
+            self.assertEqual(body, {"domainName": "example.com", "privacyStatus": expected}, repr(value))
+            self.assertIs(out["data"]["PrivacyProtectionStatus"], expected)
+
     def test_post_sends_json_body(self):
         t = FakeTransport().push(200, "{}")
         make(t).enable_theft_protection_lock("example.com")
@@ -118,7 +134,8 @@ class TransportFailureTest(unittest.TestCase):
         api = make(t)
         out = api.modify_name_server("example.com", ["ns1.example.com"])
         self.assertEqual(out["result"], "ERROR")
-        self.assertEqual(out["error"]["Code"], "API_28")
+        self.assertEqual(out["error"]["Code"], "CURL_28")
+        self.assertNotIn("GatewayCode", out["error"])
         self.assertTrue(out["error"]["Message"].startswith(
             "Could not reach the DomainNameAPI service: the connection timed out. ("))
         self.assertEqual(api.get_parsed_response_data()["Code"], "CURL_28")
@@ -128,14 +145,14 @@ class TransportFailureTest(unittest.TestCase):
         t = FakeTransport().push_error(6, "Could not resolve host: api.example")
         out = make(t).enable_theft_protection_lock("example.com")
         self.assertEqual(out["result"], "ERROR")
-        self.assertEqual(out["error"]["Code"], "API_6")
+        self.assertEqual(out["error"]["Code"], "CURL_6")
         self.assertEqual(out["error"]["Message"], "Curl error during request: Could not resolve host: api.example")
 
     def test_balance_envelope_on_failure(self):
         t = FakeTransport().push_error(7, "Failed to connect")
         out = make(t).get_current_balance("EUR")
         self.assertEqual(out["OperationResult"], "FAILED")
-        self.assertEqual(out["ErrorCode"], "API_7")
+        self.assertEqual(out["ErrorCode"], "CURL_7")
         self.assertEqual(out["CurrencySymbol"], "€")
 
 

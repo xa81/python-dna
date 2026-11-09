@@ -46,8 +46,8 @@
         "result": "OK",
         "data": {
             "Name": "",
-            "Type": "a",
-            "TTL": 90000,
+            "Type": "A",
+            "TTL": 86400,
             "Content": [
                 "1.1.1.1",
                 2

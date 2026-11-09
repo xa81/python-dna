@@ -44,8 +44,8 @@
         "result": "OK",
         "data": {
             "Name": "www",
-            "Type": "txt",
-            "TTL": 0,
+            "Type": "TXT",
+            "TTL": 3600,
             "Content": "v"
         }
     },

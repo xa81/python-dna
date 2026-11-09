@@ -51,14 +51,20 @@ class ValidateContactTest(unittest.TestCase):
             "LastName": "Isimyok",
             "AddressLine1": "Addres yok",
             "City": "ISTANBUL",
-            "State": "ISTANBUL",
             "Country": "TR",
             "ZipCode": "34000",
             "Phone": "5555555555",
             "PhoneCountryCode": "90",
+            "State": "ISTANBUL",
             "Fax": "",
             "FaxCountryCode": "",
         })
+
+    def test_own_country_code_wins(self):
+        out = api().validate_contact({"Phone": "+44 20 7123 4567", "PhoneCountryCode": "90",
+                                      "Fax": "+1 202 555 0101", "FaxCountryCode": ""})
+        self.assertEqual((out["Phone"], out["PhoneCountryCode"]), ("2071234567", "44"))
+        self.assertEqual((out["Fax"], out["FaxCountryCode"]), ("2025550101", "1"))
 
     def test_messy_contact(self):
         out = api().validate_contact({

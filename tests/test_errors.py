@@ -16,11 +16,15 @@ def call(status, body):
 class ErrorMappingTest(unittest.TestCase):
     def test_message_from_top_level(self):
         e = call(404, '{"code":"X","message":"Domain not found","details":"nope"}')
-        self.assertEqual(e, {"Code": "API_404", "Message": "Domain not found", "Details": "nope"})
+        self.assertEqual(e, {"Code": "API_404", "Message": "Domain not found", "Details": "nope", "GatewayCode": "X"})
 
     def test_message_from_error_object(self):
         e = call(400, '{"error":{"code":"C","message":"Bad thing","details":"why"}}')
-        self.assertEqual(e, {"Code": "API_400", "Message": "Bad thing", "Details": "why"})
+        self.assertEqual(e, {"Code": "API_400", "Message": "Bad thing", "Details": "why", "GatewayCode": "C"})
+
+    def test_no_gateway_code_without_gateway_code(self):
+        self.assertNotIn("GatewayCode", call(400, '{"error":{"message":"Bad thing"}}'))
+        self.assertNotIn("GatewayCode", call(302, ""))
 
     def test_raw_body_when_not_json(self):
         e = call(503, "upstream down")
@@ -45,11 +49,12 @@ class ErrorMappingTest(unittest.TestCase):
         e = call(500, '{"error":{"code":"Dna.DomainService:Dns:10024","message":"Dna.DomainService:Dns:10024","details":""}}')
         self.assertIn("(error: Dna.DomainService:Dns:10024)", e["Message"])
 
-    def test_message_equal_to_code_without_details_uses_raw_body(self):
-        # php-dna parity: missing details fall back to the raw body, which then
-        # replaces the bare-code message.
+    def test_message_equal_to_code_never_uses_raw_body(self):
         body = '{"error":{"code":"Dna.DomainService:Dns:10024","message":"Dna.DomainService:Dns:10024"}}'
-        self.assertEqual(call(500, body)["Message"], body)
+        e = call(500, body)
+        self.assertIn("(error: Dna.DomainService:Dns:10024)", e["Message"])
+        self.assertEqual(e["Details"], body)
+        self.assertEqual(e["GatewayCode"], "Dna.DomainService:Dns:10024")
 
     def test_validation_errors_are_flattened(self):
         body = ('{"error":{"message":"Validation failed.","validationErrors":['
@@ -76,6 +81,18 @@ class ErrorMappingTest(unittest.TestCase):
         out = api.get_details("example.com")
         self.assertEqual(out["error"]["Code"], "RESPONSE")
         self.assertEqual(out["error"]["Message"], "Invalid response received from server! Response is empty.")
+
+    def test_success_false_is_an_error(self):
+        api = DomainNameAPI(RESELLER, API_KEY, transport=FakeTransport().push(200, '{"success":false,"message":""}'))
+        api.set_error_reporting_enabled(False)
+        out = api.renew("example.com", 1)
+        self.assertEqual(out["error"], {"Code": "RENEW_DOMAIN", "Message": "The registry did not accept the request.",
+                                        "Details": "The registry did not accept the request."})
+
+    def test_get_forwarding_domain_missing_is_an_error(self):
+        api = DomainNameAPI(RESELLER, API_KEY, transport=FakeTransport().push(404, '{"error":{"message":"Domain not found"}}'))
+        api.set_error_reporting_enabled(False)
+        self.assertEqual(api.get_forwarding("example.com")["result"], "ERROR")
 
     def test_get_forwarding_not_found_is_ok(self):
         api = DomainNameAPI(RESELLER, API_KEY, transport=FakeTransport().push(404, '{"error":{"message":"Redirect information not found"}}'))

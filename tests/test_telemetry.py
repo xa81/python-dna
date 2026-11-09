@@ -94,6 +94,11 @@ class ErrorEventTest(unittest.TestCase):
         api.get_details("example.com")
         self.assertEqual(sent, [])
 
+    def test_forward_not_set_is_not_sent(self):
+        api, sent = client(FakeTransport().push(404, '{"error":{"message":"Redirect information not found"}}'))
+        self.assertEqual(api.get_forwarding("example.com")["data"]["Enabled"], False)
+        self.assertEqual(sent, [])
+
     def test_disabled(self):
         api, sent = client(FakeTransport().push(500, '{"error":{"message":"boom"}}'))
         api.set_error_reporting_enabled(False)

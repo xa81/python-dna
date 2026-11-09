@@ -1,7 +1,7 @@
 """Extra php-dna edge cases: odd gateway shapes and loosely typed inputs.
 
 Same format as the conformance fixtures. They were produced by running
-php-dna 4.0.4 itself (its conformance generator and mock gateway) on extra
+php-dna itself (its conformance generator and mock gateway) on extra
 scenarios: numeric strings, assoc arrays, unusual price/zone/list shapes,
 error bodies without messages and similar inputs a PHP caller may pass.
 """

@@ -31,7 +31,8 @@
         "error": {
             "Code": "API_500",
             "Message": "Real reason",
-            "Details": "Dna   Real reason"
+            "Details": "Dna   Real reason",
+            "GatewayCode": "C"
         }
     },
     "ignore": []

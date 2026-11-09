@@ -28,7 +28,7 @@
         "result": "ERROR",
         "error": {
             "Code": "API_400",
-            "Message": "{\"error\": {\"code\": 42, \"message\": \"42\"}}",
+            "Message": "The operation could not be completed by the registry (error: 42). Please try again or contact support.",
             "Details": "{\"error\": {\"code\": 42, \"message\": \"42\"}}"
         }
     },
