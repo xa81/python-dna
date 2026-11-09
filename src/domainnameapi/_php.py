@@ -143,31 +143,27 @@ def to_dict(value):
 
 
 def float_to_string(value):
-    """PHP 8 ``(string)$float`` (shortest round-trip repr, PHP exponent style)."""
+    """PHP 8 ``(string)$float``: 14 significant digits (``precision`` ini),
+    exponent notation below 1e-4 and from 1e15 on (``1.0E+15``)."""
     if math.isnan(value):
         return "NAN"
     if math.isinf(value):
         return "INF" if value > 0 else "-INF"
     if value == 0:
         return "-0" if math.copysign(1.0, value) < 0 else "0"
-    r = repr(value)
-    if "e" in r or "E" in r:
-        mantissa, exp = r.lower().split("e")
+    precision = 14
+    mantissa, exp = ("%.*e" % (precision - 1, value)).split("e")
+    exp = int(exp)
+    if exp < -4 or exp >= precision:
+        if "." in mantissa:
+            mantissa = mantissa.rstrip("0").rstrip(".")
         if "." not in mantissa:
             mantissa += ".0"
-        exp_i = int(exp)
-        return "%sE%s%d" % (mantissa, "+" if exp_i >= 0 else "-", abs(exp_i))
-    if abs(value) >= 1e15:
-        # PHP switches to exponent notation from 1.0E+15 on.
-        digits = Decimal(r).normalize()
-        sign, ds, exp = digits.as_tuple()
-        mant = "".join(str(d) for d in ds)
-        e = len(mant) - 1 + exp
-        mant = mant[0] + "." + (mant[1:] or "0")
-        return "%s%sE+%d" % ("-" if sign else "", mant, e)
-    if r.endswith(".0"):
-        r = r[:-2]
-    return r
+        return "%sE%s%d" % (mantissa, "+" if exp >= 0 else "-", abs(exp))
+    text = "%.*f" % (max(0, precision - 1 - exp), value)
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
 
 
 def strval(value):
@@ -210,9 +206,19 @@ def floatval(value):
     return 0.0
 
 
-def _float_to_int(value):
+_INT_MAX = 2 ** 63 - 1
+_INT_MIN = -(2 ** 63)
+
+
+def _float_to_int(value, saturate=False):
     if math.isnan(value) or math.isinf(value):
-        return 0
+        return 0 if not saturate or math.isnan(value) else (_INT_MAX if value > 0 else _INT_MIN)
+    if not (_INT_MIN <= value < 2.0 ** 63):
+        if saturate:
+            return _INT_MAX if value > 0 else _INT_MIN
+        # PHP 8 wraps out-of-range floats modulo 2**64.
+        r = int(value) % (2 ** 64)
+        return r - 2 ** 64 if r >= 2 ** 63 else r
     return int(value)
 
 
@@ -232,9 +238,9 @@ def intval(value):
             return 0
         num = m.group(1)
         if _INT_PREFIX_RE.match(num):
-            return int(num)
+            return max(_INT_MIN, min(_INT_MAX, int(num)))
         try:
-            return _float_to_int(float(num))
+            return _float_to_int(float(num), saturate=True)
         except (ValueError, OverflowError):
             return 0
     if isinstance(value, (list, dict, tuple)):
