@@ -1,6 +1,7 @@
 """python-dna example: GetCurrentBalance
 
-Current balance in one currency: USD (default), TRY, EUR or GBP.
+Current balance in one currency: USD (default) or TRY. A currency the account does not
+report (EUR, GBP, ...) returns OperationResult FAILED with ErrorCode BALANCE.
 """
 import os
 import sys

@@ -1,6 +1,7 @@
 """python-dna example: ModifyPrivacyProtectionStatus
 
-Turn WHOIS privacy protection on (True) or off (False).
+Turn WHOIS privacy protection on (True) or off (False). 1, "1", "on", "true" and "yes"
+also mean on; anything else means off. The reason argument is not sent to the gateway.
 """
 import os
 import sys

@@ -1,6 +1,7 @@
 """python-dna example: Transfer
 
-Start an incoming transfer with the domain's EPP/auth code.
+Start an incoming transfer with the domain's EPP/auth code. Contacts are never sent:
+the registrar takes them over. A refusal (success: false) returns a TRANSFER_DOMAIN error.
 """
 import os
 import sys

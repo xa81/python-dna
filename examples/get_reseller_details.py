@@ -29,4 +29,4 @@ pprint(result, sort_dicts=False)
 #  'currency': 'USD',
 #  'symbol': '$',
 #  'balances': [{'balance': '601.64', 'currency': 'USD', 'symbol': '$'},
-#               {'balance': '1250.5', 'currency': 'TL', 'symbol': 'TL'}]}
+#               {'balance': '1250.50', 'currency': 'TL', 'symbol': 'TL'}]}

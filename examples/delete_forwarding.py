@@ -1,6 +1,6 @@
 """python-dna example: DeleteForwarding
 
-Remove URL forwarding.
+Remove URL forwarding. Removed is False (and result OK) when nothing was configured.
 """
 import os
 import sys
@@ -21,4 +21,4 @@ result = dna.delete_forwarding("example.com")
 pprint(result, sort_dicts=False)
 
 # Sample output:
-# {'result': 'OK', 'data': {'DomainName': 'example.com'}}
+# {'result': 'OK', 'data': {'DomainName': 'example.com', 'Removed': True}}

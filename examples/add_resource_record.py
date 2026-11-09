@@ -23,4 +23,4 @@ pprint(result, sort_dicts=False)
 
 # Sample output:
 # {'result': 'OK',
-#  'data': {'Name': 'www', 'Type': 'a', 'TTL': 300, 'Content': '192.0.2.5'}}
+#  'data': {'Name': 'www', 'Type': 'A', 'TTL': 300, 'Content': '192.0.2.5'}}
