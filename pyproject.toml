@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "domainnameapi"
+dynamic = ["version"]
+description = "Python client for the DomainNameAPI (domainnameapi.com) REST API: register, transfer, renew and manage domains, contacts, DNS zones and forwarding."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Atak Domain" }]
+keywords = [
+    "domainnameapi",
+    "domain-name-api",
+    "dna",
+    "domain",
+    "domains",
+    "registrar",
+    "reseller",
+    "rest",
+    "domain-registration",
+    "domain-transfer",
+    "dns",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: Name Service (DNS)",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/domainreseller/python-dna"
+Source = "https://github.com/domainreseller/python-dna"
+Issues = "https://github.com/domainreseller/python-dna/issues"
+Changelog = "https://github.com/domainreseller/python-dna/blob/main/CHANGELOG.md"
+Releases = "https://github.com/domainreseller/python-dna/releases"
+
+[tool.hatch.version]
+path = "src/domainnameapi/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/domainnameapi"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/domainnameapi",
+    "tests",
+    "examples",
+    "README*.md",
+    "CHANGELOG.md",
+    "LICENSE",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
