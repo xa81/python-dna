@@ -16,7 +16,6 @@ from .shared import (
     DEFAULT_CONNECT_TIMEOUT,
     DEFAULT_ERRORS,
     DEFAULT_NAMESERVERS,
-    DEFAULT_REASON,
     DEFAULT_TIMEOUT,
     RESULT_ERROR,
     RESULT_OK,
@@ -174,6 +173,12 @@ def _normalize_phone(number, country_code):
             digits = digits[2:]
         if cc != "" and digits.startswith(cc) and len(digits) > len(cc):
             digits = digits[len(cc):]
+        else:
+            # The number carries its own country code and it differs from the given one.
+            own = _calling_code_prefix(digits)
+            if own != "" and len(digits) > len(own):
+                cc = own
+                digits = digits[len(own):]
     elif cc != "" and digits.startswith(cc) and len(digits) > 10:
         digits = digits[len(cc):]
 
@@ -188,6 +193,24 @@ def _normalize_phone(number, country_code):
         digits = digits.lstrip("0")
 
     return digits, cc
+
+
+_TWO_DIGIT_CODES = (
+    "20", "27", "30", "31", "32", "33", "34", "36", "39", "40", "41", "43", "44", "45", "46", "47",
+    "48", "49", "51", "52", "53", "54", "55", "56", "57", "58", "60", "61", "62", "63", "64", "65",
+    "66", "81", "82", "84", "86", "90", "91", "92", "93", "94", "95", "98",
+)
+
+
+def _calling_code_prefix(digits):
+    """E.164 country calling code at the start of an international number."""
+    if digits == "" or digits[0] == "0":
+        return ""
+    if digits[0] in ("1", "7"):
+        return digits[0]
+    if digits[:2] in _TWO_DIGIT_CODES:
+        return digits[:2]
+    return digits[:3] if len(digits) >= 3 else ""
 
 
 def _flatten_validation_errors(validation_errors):
@@ -433,6 +456,8 @@ class DNARest(object):
         self.connect_timeout = DEFAULT_CONNECT_TIMEOUT
         self.zone_min_interval = ZONE_MIN_INTERVAL
         self._last_zone_request_at = 0.0
+        self._transport_failed = False  # last request failed in transport, not with an HTTP status
+        self._last_gateway_code = ""    # the gateway's own error code from the last failed request
 
         self.last_request = {}
         self.last_response = {}
@@ -511,6 +536,12 @@ class DNARest(object):
                 time.sleep(wait)
         self._last_zone_request_at = time.time()
 
+    def _err(self, code, message="", details=""):
+        return set_error(code, message, details, self._last_gateway_code)
+
+    def _code(self, exc):
+        return format_error_code(exc.code, self._transport_failed)
+
     def _error_details(self, exc, fallback=None):
         """Details for a catch block: parsed Details, else raw body, else the message."""
         details = php.get(self.last_parsed_response, "Details")
@@ -522,10 +553,10 @@ class DNARest(object):
         return exc.message if fallback is None else fallback
 
     def _fail(self, exc, default_code):
-        code = format_error_code(exc.code) or default_code
+        code = self._code(exc) or default_code
         return {
             "result": RESULT_ERROR,
-            "error": set_error(code, exc.message, self._error_details(exc)),
+            "error": self._err(code, exc.message, self._error_details(exc)),
         }
 
     def _request(self, method, endpoint, data=None):
@@ -533,6 +564,8 @@ class DNARest(object):
         if data is None:
             data = {}
         self._pace_zone_request(endpoint)
+        self._transport_failed = False
+        self._last_gateway_code = ""
         self.started_at = time.time()
 
         endpoint = php.strval(endpoint)
@@ -558,13 +591,14 @@ class DNARest(object):
         try:
             resp = self.transport.send(req)
         except TransportError as err:
+            self._transport_failed = True
             self.last_response_headers = {"url": url, "http_code": 0, "total_time": time.time() - self.started_at}
             self.last_response = {"raw_response": False}
             if err.errno == CURLE_OPERATION_TIMEDOUT:
                 message = "Could not reach the DomainNameAPI service: the connection timed out. (" + err.message + ")"
             else:
                 message = "Curl error during request: " + err.message
-            self.last_parsed_response = set_error("CURL_%d" % err.errno, message, message)
+            self.last_parsed_response = self._err("CURL_%d" % err.errno, message, message)
             error = ApiError(message, err.errno)
             self.telemetry.send_error(error)
             raise error
@@ -599,7 +633,12 @@ class DNARest(object):
 
         error_message = php.coalesce(php.get(parsed, "message"), php.get(parsed, "error", "message"), body_text)
         error_code = php.coalesce(php.get(parsed, "code"), php.get(parsed, "error", "code"), "HTTP_%d" % status)
-        error_details = php.coalesce(php.get(parsed, "details"), php.get(parsed, "error", "details"), body_text)
+        api_details = php.coalesce(php.get(parsed, "details"), php.get(parsed, "error", "details"))
+        error_details = php.coalesce(api_details, body_text)
+        # The gateway's own code (e.g. Dna.DomainService:Domain:10007) is kept as GatewayCode.
+        if (isinstance(error_code, str) and error_code != "" and not error_code.startswith("HTTP_")
+                and error_code != "CREDENTIALS"):
+            self._last_gateway_code = error_code
 
         if php.trim(error_message) == "":
             error_message = "HTTP %d - %s" % (status, _http_status_reason(status))
@@ -608,7 +647,7 @@ class DNARest(object):
 
         is_boilerplate = bool(_BOILERPLATE_RE.search(php.strval(error_message)))
         if is_boilerplate or php.strval(error_message) == php.strval(error_code):
-            details_clean = php.trim(re.sub(r"^Dna[" + _PCRE_SPACE + r"]+", "", php.strval(error_details), count=1))
+            details_clean = php.trim(re.sub(r"^Dna[" + _PCRE_SPACE + r"]+", "", php.strval(api_details), count=1))
             if (details_clean != ""
                     and details_clean != php.strval(error_message)
                     and details_clean != php.strval(error_code)
@@ -624,7 +663,7 @@ class DNARest(object):
             if flattened != "":
                 error_details = flattened
 
-        self.last_parsed_response = set_error(error_code, error_message, error_details)
+        self.last_parsed_response = self._err(error_code, error_message, error_details)
         error = ApiError(php.strval(error_message), status)
         self.telemetry.send_error(error)
         raise error
@@ -638,7 +677,7 @@ class DNARest(object):
             response = self._request("GET", "deposit/accounts/me")
             resp = {}
             if php.get(response, "resellerId") is not None:
-                usd = php.strval(php.coalesce(php.get(response, "usdBalance"), 0))
+                usd = php.number_format(php.floatval(php.coalesce(php.get(response, "usdBalance"), 0)), 2)
                 resp["result"] = RESULT_OK
                 resp["id"] = php.get(response, "resellerId")
                 resp["active"] = True  # the API returns no status
@@ -649,14 +688,14 @@ class DNARest(object):
                 resp["balances"] = [
                     {"balance": usd, "currency": "USD", "symbol": "$"},
                     {
-                        "balance": php.strval(php.coalesce(php.get(response, "tryBalance"), 0)),
+                        "balance": php.number_format(php.floatval(php.coalesce(php.get(response, "tryBalance"), 0)), 2),
                         "currency": "TL",
                         "symbol": "TL",
                     },
                 ]
             else:
                 resp["result"] = RESULT_ERROR
-                resp["error"] = set_error("CREDENTIALS", "Invalid response format",
+                resp["error"] = self._err("CREDENTIALS", "Invalid response format",
                                           "Response does not contain required fields")
             return resp
         except ApiError as e:
@@ -674,6 +713,18 @@ class DNARest(object):
         try:
             response = self._request("GET", "deposit/accounts/me", {"currency": currency_name})
             balance_key = php.strtolower(currency_id) + "Balance"
+            if not isinstance(response, dict) or balance_key not in response:
+                # The account only reports USD and TRY balances.
+                return {
+                    "ErrorCode": "BALANCE",
+                    "OperationMessage": "No %s balance is reported for this account. Available: USD, TRY." % currency_name,
+                    "OperationResult": "FAILED",
+                    "Balance": "0.00",
+                    "CurrencyId": mapped["id"],
+                    "CurrencyInfo": None,
+                    "CurrencyName": mapped["name"],
+                    "CurrencySymbol": mapped["symbol"],
+                }
             return {
                 "ErrorCode": 0,
                 "OperationMessage": "Command completed succesfully.",
@@ -686,7 +737,7 @@ class DNARest(object):
             }
         except ApiError as e:
             return {
-                "ErrorCode": format_error_code(e.code) or "BALANCE",
+                "ErrorCode": self._code(e) or "BALANCE",
                 "OperationMessage": e.message,
                 "OperationResult": "FAILED",
                 "Balance": "0.00",
@@ -710,7 +761,7 @@ class DNARest(object):
             if not queries:
                 return {
                     "result": RESULT_ERROR,
-                    "error": set_error("AVAILABILITY", "Domain names not found.",
+                    "error": self._err("AVAILABILITY", "Domain names not found.",
                                        "No domain names provided for availability check"),
                 }
 
@@ -729,7 +780,10 @@ class DNARest(object):
                         tld_value = name[pos + 1:] if pos >= 0 else ""
                     tld = php.strtolower(tld_value)
                     domain_raw = php.coalesce(php.get(item, "domainName"), "")
-                    domain_name = php.strtolower(domain_raw).replace("." + tld, "")
+                    # Strip only the trailing ".tld".
+                    lower = php.strtolower(domain_raw)
+                    suffix = "." + tld
+                    domain_name = lower[:-len(suffix)] if (tld != "" and lower.endswith(suffix)) else lower
                     status = php.strtolower(php.coalesce(php.get(item, "status"), ""))
                     is_available = any(php.loose_equals_string(status, s) for s in ("available", "1", "true"))
                     price = php.get(item, "price")
@@ -899,7 +953,7 @@ class DNARest(object):
             response = self._request("PUT", "domains/dns/name-server", payload)
             return {
                 "result": RESULT_OK,
-                "data": {"NameServers": php.coalesce(php.get(response, "nameServers"), name_servers)},
+                "data": {"NameServers": php.coalesce(php.get(response, "nameServers"), payload["nameServers"])},
             }
         except ApiError as e:
             return self._fail(e, "MODIFY_NS")
@@ -921,24 +975,28 @@ class DNARest(object):
 
     def modify_privacy_protection_status(self, domain_name, status, reason="Owner request"):
         try:
-            if php.empty(reason):
-                reason = DEFAULT_REASON  # noqa: F841 - kept for parity; the gateway takes no reason
-            payload = {"domainName": domain_name, "privacyStatus": status is True}
+            # ``reason`` is kept for signature compatibility only: the gateway's
+            # DomainPrivacyInput has no reason field. 1/"1"/"on"/"true"/"yes" enable privacy.
+            enabled = status if isinstance(status, bool) else php.filter_bool(status)
+            payload = {"domainName": domain_name, "privacyStatus": enabled}
             self._request("POST", "domains/privacy", payload)
-            return {"data": {"PrivacyProtectionStatus": status}, "result": RESULT_OK}
+            return {"data": {"PrivacyProtectionStatus": enabled}, "result": RESULT_OK}
         except ApiError as e:
             return self._fail(e, "MODIFY_PRIVACY")
 
     def renew(self, domain_name, period):
         try:
             response = self._request("POST", "domains/renew", {"domainName": domain_name, "period": period})
+            failed = self._operation_failure(response, "RENEW_DOMAIN")
+            if failed:
+                return failed
             if php.truthy(php.coalesce(php.get(response, "expirationDate"), False)):
                 return {
                     "result": RESULT_OK,
                     "data": {"ExpirationDate": _format_api_date(php.get(response, "expirationDate"))},
                 }
             self.telemetry.send_error(ApiError("[DOMAIN_RENEW] " + DEFAULT_ERRORS["DOMAIN_RENEW"]["description"], 0))
-            return {"result": RESULT_ERROR, "error": set_error("DOMAIN_RENEW")}
+            return {"result": RESULT_ERROR, "error": self._err("DOMAIN_RENEW")}
         except ApiError as e:
             return self._fail(e, "RENEW_DOMAIN")
 
@@ -974,6 +1032,9 @@ class DNARest(object):
                 "tldAttributes": php.JsonObject(additional_attributes),
             }
             response = self._request("POST", "domains/register-with-contacts", payload)
+            failed = self._operation_failure(response, "REGISTER_DOMAIN")
+            if failed:
+                return failed
             return self._parse_domain_info(response)
         except ApiError as e:
             return self._fail(e, "REGISTER_DOMAIN")
@@ -1035,23 +1096,35 @@ class DNARest(object):
     def get_contacts(self, domain_name):
         try:
             domain_info = self._request("GET", "domains/info", {"DomainName": domain_name})
-            type_map = {"Admin": "Administrative", "Billing": "Billing", "Tech": "Technical", "Registrant": "Registrant"}
+            # Matched case-insensitively, with the long and short spellings.
+            type_map = {
+                "admin": "Administrative", "administrative": "Administrative",
+                "billing": "Billing",
+                "tech": "Technical", "technical": "Technical",
+                "registrant": "Registrant", "owner": "Registrant",
+            }
             contacts = {}
             contact_items = php.get(domain_info, "contacts")
             if php.is_array(contact_items):
                 for item in php.values(contact_items):
-                    api_type = php.coalesce(php.get(item, "contactType"), "")
-                    key = type_map.get(api_type) if isinstance(api_type, str) else None
+                    if not php.is_array(item):
+                        continue
+                    api_type = php.trim(php.strval(php.coalesce(php.get(item, "contactType"), "")))
+                    key = type_map.get(php.strtolower(api_type))
                     if key is None:
                         key = php.ucfirst(php.strtolower(api_type))
+                    if key == "":
+                        continue
                     merged = dict(php.to_dict(item))
                     merged["type"] = key
                     contacts[key] = _parse_contact_info(merged)
 
+            # Administrative, Billing, Registrant, Technical, then any other type (kept).
             ordered = {}
             for key in ("Administrative", "Billing", "Registrant", "Technical"):
                 if contacts.get(key) is not None:
-                    ordered[key] = contacts[key]
+                    ordered[key] = contacts.pop(key)
+            ordered.update(contacts)
             return {"data": {"contacts": ordered}, "result": RESULT_OK}
         except ApiError as e:
             return self._fail(e, "GET_CONTACTS")
@@ -1076,19 +1149,19 @@ class DNARest(object):
     # Transfers
     # ------------------------------------------------------------------
 
-    def transfer(self, domain_name, epp_code, period, contacts=None):
+    def transfer(self, domain_name, epp_code, period):
+        """Start an incoming transfer. Contacts are never sent: the registrar handles them."""
         try:
-            payload_contacts = []
-            if not php.empty(contacts):
-                for type_, details in php.items(contacts):
-                    payload_contacts.append(self._parse_contact(details, php.ucfirst(php.strtolower(type_))))
             payload = {
                 "domainName": domain_name,
                 "authCode": epp_code,
                 "period": period,
-                "contacts": payload_contacts,
+                "contacts": [],
             }
             response = self._request("POST", "domains/transfer", payload)
+            failed = self._operation_failure(response, "TRANSFER_DOMAIN")
+            if failed:
+                return failed
             return self._parse_domain_info(response)
         except ApiError as e:
             return self._fail(e, "TRANSFER_DOMAIN")
@@ -1135,7 +1208,7 @@ class DNARest(object):
                 },
             }
             if not available:
-                envelope["error"] = set_error(
+                envelope["error"] = self._err(
                     "TRANSFER_NOT_AVAILABLE",
                     php.coalesce(g("message"), "Domain is not transferable"),
                     php.coalesce(g("messageKey"), g("message"), ""),
@@ -1178,16 +1251,20 @@ class DNARest(object):
         try:
             why = _unsupported_zone_type(type_)
             if why:
-                return {"result": RESULT_ERROR, "error": set_error("ADD_ZONE", why, why)}
+                return {"result": RESULT_ERROR, "error": self._err("ADD_ZONE", why, why)}
             name = _relativize_record_name(name, domain_name)
             body = {"zoneStruct": _build_zone_struct(name, type_, content, ttl)}
             endpoint = "domains/zones?" + php.http_build_query({"domainName": domain_name})
             self._request("POST", endpoint, body)
             if php.truthy(apply):
-                self.apply_resource_records(domain_name)
+                # A failed apply leaves the change staged but not live: report it.
+                applied = self.apply_resource_records(domain_name)
+                if applied.get("result") != RESULT_OK:
+                    return applied
             return {
                 "result": RESULT_OK,
-                "data": {"Name": name, "Type": type_, "TTL": php.intval(ttl), "Content": content},
+                "data": {"Name": name, "Type": body["zoneStruct"]["type"], "TTL": body["zoneStruct"]["ttl"],
+                         "Content": content},
             }
         except ApiError as e:
             return self._fail(e, "ADD_ZONE")
@@ -1196,16 +1273,20 @@ class DNARest(object):
         try:
             why = _unsupported_zone_type(type_)
             if why:
-                return {"result": RESULT_ERROR, "error": set_error("EDIT_ZONE", why, why)}
+                return {"result": RESULT_ERROR, "error": self._err("EDIT_ZONE", why, why)}
             name = _relativize_record_name(name, domain_name)
             body = {"zoneStruct": _build_zone_struct(name, type_, content, ttl)}
             endpoint = "domains/zones?" + php.http_build_query({"domainName": domain_name, "recordName": record_name})
             self._request("PUT", endpoint, body)
             if php.truthy(apply):
-                self.apply_resource_records(domain_name)
+                # A failed apply leaves the change staged but not live: report it.
+                applied = self.apply_resource_records(domain_name)
+                if applied.get("result") != RESULT_OK:
+                    return applied
             return {
                 "result": RESULT_OK,
-                "data": {"Name": name, "Type": type_, "TTL": php.intval(ttl), "Content": content},
+                "data": {"Name": name, "Type": body["zoneStruct"]["type"], "TTL": body["zoneStruct"]["ttl"],
+                         "Content": content},
             }
         except ApiError as e:
             return self._fail(e, "EDIT_ZONE")
@@ -1219,7 +1300,10 @@ class DNARest(object):
                 "RecordType": record_type,
             })
             if php.truthy(apply):
-                self.apply_resource_records(domain_name)
+                # A failed apply leaves the change staged but not live: report it.
+                applied = self.apply_resource_records(domain_name)
+                if applied.get("result") != RESULT_OK:
+                    return applied
             return {"result": RESULT_OK, "data": {"Name": name, "Type": record_type, "Content": record}}
         except ApiError as e:
             return self._fail(e, "DELETE_ZONE")
@@ -1238,7 +1322,7 @@ class DNARest(object):
         try:
             why = _unsupported_zone_type(type_)
             if why:
-                return {"result": RESULT_ERROR, "error": set_error("SET_ZONE", why, why)}
+                return {"result": RESULT_ERROR, "error": self._err("SET_ZONE", why, why)}
             name = _relativize_record_name(name, domain_name)
             contents = [v for v in (php.strval(x) for x in php.values(contents)) if php.trim(v) != ""]
             if not contents:
@@ -1249,10 +1333,14 @@ class DNARest(object):
             endpoint = "domains/zones?" + php.http_build_query({"domainName": domain_name})
             self._request("POST", endpoint, body)
             if php.truthy(apply):
-                self.apply_resource_records(domain_name)
+                # A failed apply leaves the change staged but not live: report it.
+                applied = self.apply_resource_records(domain_name)
+                if applied.get("result") != RESULT_OK:
+                    return applied
             return {
                 "result": RESULT_OK,
-                "data": {"Name": name, "Type": php.strtoupper(type_), "TTL": php.intval(ttl), "Contents": contents},
+                "data": {"Name": name, "Type": body["zoneStruct"]["type"], "TTL": body["zoneStruct"]["ttl"],
+                         "Contents": contents},
             }
         except ApiError as e:
             return self._fail(e, "SET_ZONE")
@@ -1297,7 +1385,7 @@ class DNARest(object):
         try:
             why = _unsupported_zone_type(type_)
             if why:
-                return {"result": RESULT_ERROR, "error": set_error("ADD_ZONE", why, why)}
+                return {"result": RESULT_ERROR, "error": self._err("ADD_ZONE", why, why)}
             name = _relativize_record_name(name, domain_name)
             rset = self._read_resource_record_set(domain_name, name, type_)
             if "result" in rset:
@@ -1319,7 +1407,7 @@ class DNARest(object):
         try:
             why = _unsupported_zone_type(type_)
             if why:
-                return {"result": RESULT_ERROR, "error": set_error("DELETE_ZONE", why, why)}
+                return {"result": RESULT_ERROR, "error": self._err("DELETE_ZONE", why, why)}
             name = _relativize_record_name(name, domain_name)
             rset = self._read_resource_record_set(domain_name, name, type_)
             if "result" in rset:
@@ -1346,7 +1434,7 @@ class DNARest(object):
         try:
             why = _unsupported_zone_type(type_)
             if why:
-                return {"result": RESULT_ERROR, "error": set_error("EDIT_ZONE", why, why)}
+                return {"result": RESULT_ERROR, "error": self._err("EDIT_ZONE", why, why)}
             name = _relativize_record_name(name, domain_name)
             rset = self._read_resource_record_set(domain_name, name, type_)
             if "result" in rset:
@@ -1361,7 +1449,7 @@ class DNARest(object):
                 contents.append(existing)
             if not found:
                 why = 'No %s record "%s" with value "%s" to edit.' % (php.strtoupper(type_), name, php.strval(old_value))
-                return {"result": RESULT_ERROR, "error": set_error("EDIT_ZONE", why, why)}
+                return {"result": RESULT_ERROR, "error": self._err("EDIT_ZONE", why, why)}
             return self.set_resource_record_set(domain_name, name, type_, contents,
                                                 ttl if ttl is not None else (rset["ttl"] or 3600), apply)
         except ApiError as e:
@@ -1385,12 +1473,13 @@ class DNARest(object):
             }
         except ApiError as e:
             raw = php.coalesce(php.get(self.last_response, "raw_response"), e.message)
-            if php.stripos_found(php.strval(raw), "not found") or php.stripos_found(e.message, "not found"):
+            # Only the gateway's "no forwarding configured" answer means disabled.
+            if self._is_forward_not_set(e):
                 return {"result": RESULT_OK, "data": {"Enabled": False, "RedirectAddress": "", "ForwardType": ""}}
             details = php.coalesce(php.get(self.last_parsed_response, "Details"), raw)
             return {
                 "result": RESULT_ERROR,
-                "error": set_error(format_error_code(e.code) or "GET_FORWARD", e.message, details),
+                "error": self._err(self._code(e) or "GET_FORWARD", e.message, details),
             }
 
     def set_forwarding(self, domain_name, redirect_address, forward_type="Standard"):
@@ -1399,10 +1488,10 @@ class DNARest(object):
             if type_ not in FORWARD_TYPES:
                 why = 'Forward type "%s" is not supported. Supported types: %s.' % (
                     php.strval(forward_type), ", ".join(FORWARD_TYPES))
-                return {"result": RESULT_ERROR, "error": set_error("SET_FORWARD", why, why)}
+                return {"result": RESULT_ERROR, "error": self._err("SET_FORWARD", why, why)}
             if php.trim(redirect_address) == "":
                 why = "Redirect address is required."
-                return {"result": RESULT_ERROR, "error": set_error("SET_FORWARD", why, why)}
+                return {"result": RESULT_ERROR, "error": self._err("SET_FORWARD", why, why)}
             self._request("POST", "domains/forwards", {
                 "domainName": domain_name,
                 "redirectAddress": redirect_address,
@@ -1416,9 +1505,33 @@ class DNARest(object):
         try:
             # PascalCase query key, unlike the GET.
             self._request("DELETE", "domains/forwards", {"DomainName": domain_name})
-            return {"result": RESULT_OK, "data": {"DomainName": domain_name}}
+            return {"result": RESULT_OK, "data": {"DomainName": domain_name, "Removed": True}}
         except ApiError as e:
+            # Nothing configured: deleting is a no-op.
+            if self._is_forward_not_set(e):
+                return {"result": RESULT_OK, "data": {"DomainName": domain_name, "Removed": False}}
             return self._fail(e, "DELETE_FORWARD")
+
+    def _is_forward_not_set(self, exc):
+        """The gateway answers "Redirect information not found" when no forwarding is set."""
+        needle = "redirect information not found"
+        raw = php.get(self.last_response, "raw_response")
+        try:
+            encoded = php.json_encode(self.last_response if self.last_response is not None else [])
+        except (TypeError, ValueError):
+            encoded = ""
+        return (php.stripos_found(exc.message, needle)
+                or php.stripos_found(php.strval(raw), needle)
+                or php.stripos_found(encoded, needle))
+
+    def _operation_failure(self, response, code):
+        """register/transfer/renew may answer 200 with ``success: false``: that is a refusal."""
+        if not isinstance(response, dict) or "success" not in response or response["success"] is not False:
+            return None
+        message = php.trim(php.strval(php.coalesce(response.get("message"), "")))
+        if message == "":
+            message = "The registry did not accept the request."
+        return {"result": RESULT_ERROR, "error": self._err(code, message, message)}
 
     # ------------------------------------------------------------------
     # Utilities (no network)
@@ -1435,7 +1548,6 @@ class DNARest(object):
             "LastName": "Isimyok",
             "AddressLine1": "Addres yok",
             "City": "ISTANBUL",
-            "State": "ISTANBUL",
             "Country": "TR",
             "ZipCode": "34000",
             "Phone": "5555555555",
@@ -1445,6 +1557,9 @@ class DNARest(object):
         for key, value in defaults.items():
             if contact.get(key) is None:
                 contact[key] = value
+        # No State default: a missing state falls back to the city below.
+        if contact.get("State") is None:
+            contact["State"] = ""
 
         contact["FirstName"] = _sanitize_person_name(contact["FirstName"])
         contact["LastName"] = _sanitize_person_name(contact["LastName"])
@@ -1485,7 +1600,7 @@ class DNARest(object):
 
     def _parse_domain_info(self, data):
         if php.empty(data):
-            return {"result": RESULT_ERROR, "error": set_error("RESPONSE")}
+            return {"result": RESULT_ERROR, "error": self._err("RESPONSE")}
         g = lambda *k: php.get(data, *k)  # noqa: E731
 
         def child(ns):

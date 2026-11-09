@@ -9,13 +9,11 @@ import re
 from . import _php as php
 from .rest import DNARest
 
-_TRUE_STRINGS = ("1", "true", "on", "yes")
-
 
 def _parse_test_mode(value):
     """Panels store checkboxes as strings; ``"false"``/``"off"`` must stay off (BUG-10284)."""
     if isinstance(value, str):
-        return php.trim(value).lower() in _TRUE_STRINGS
+        return php.filter_bool(php.trim(value))
     return php.to_bool(value)
 
 
@@ -138,13 +136,11 @@ class DomainNameAPI(object):
 
     # -- transfers ------------------------------------------------------------
 
-    def transfer(self, domain_name, epp_code, period, contacts=None):
-        """Start an incoming transfer.
+    def transfer(self, domain_name, epp_code, period):
+        """Start an incoming transfer with the EPP/auth code.
 
-        ``contacts`` is accepted for signature compatibility but, exactly like
-        the php-dna 4.0.4 facade, it is not forwarded: the request always
-        carries ``"contacts": []``. Use ``client.transfer(...)`` on the
-        underlying :class:`DNARest` to send contacts.
+        Contacts are never sent (the request carries ``"contacts": []``): the
+        registrar takes them over from the losing registrar.
         """
         return self._client.transfer(domain_name, epp_code, period)
 

@@ -248,6 +248,15 @@ def intval(value):
     return 0
 
 
+def filter_bool(value):
+    """``filter_var($value, FILTER_VALIDATE_BOOLEAN)``: "1"/"true"/"on"/"yes" -> True."""
+    if value is True:
+        return True
+    if value is None or value is False or isinstance(value, (list, dict, tuple)):
+        return False
+    return strval(value).strip(" \t\n\r\x0b\f\0").lower() in ("1", "true", "on", "yes")
+
+
 def to_bool(value):
     """PHP ``(bool) $value``."""
     return truthy(value)

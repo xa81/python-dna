@@ -3,6 +3,8 @@
 Port of php-dna ``SharedApiConfigAndUtilsTrait``.
 """
 
+import re
+
 from . import _php as php
 from ._version import VERSION
 
@@ -31,6 +33,7 @@ DEFAULT_IGNORED_ERRORS = [
     "Invalid API credentials",
     "could not be found",  # API_404 "The domain name you requested could not be found"
     "Insufficent reseller balance",  # (sic) matches the gateway's spelling
+    "Redirect information not found",  # no forwarding configured: get_forwarding reports it as disabled
 ]
 
 DEFAULT_ERRORS = {
@@ -132,26 +135,31 @@ class ApiError(Exception):
         self.code = code
 
 
-def set_error(code, message="", details=""):
+def set_error(code, message="", details="", gateway_code=""):
     """Build the ``{'Code', 'Message', 'Details'}`` error dict.
 
     For a known code the caller's message/details win and the predefined text
-    is only the fallback when they are blank.
+    is only the fallback when they are blank. An ``API_<status>`` error also
+    carries the gateway's own code as ``GatewayCode`` when there is one.
     """
     known = DEFAULT_ERRORS.get(code) if isinstance(code, str) else None
     if known is not None:
-        return {
+        result = {
             "Code": known["code"],
             "Message": message if php.trim(message) != "" else known["message"],
             "Details": details if php.trim(details) != "" else known["description"],
         }
-    return {"Code": code, "Message": message, "Details": details}
+    else:
+        result = {"Code": code, "Message": message, "Details": details}
+    if gateway_code and isinstance(result["Code"], str) and re.match(r"^API_\d+$", result["Code"]):
+        result["GatewayCode"] = gateway_code
+    return result
 
 
-def format_error_code(code):
-    """HTTP/transport codes become ``API_<code>``."""
+def format_error_code(code, transport_failed=False):
+    """HTTP statuses become ``API_<status>``, transport errors ``CURL_<errno>``."""
     if php.is_numeric(code):
-        return "API_" + php.strval(code)
+        return ("CURL_" if transport_failed else "API_") + php.strval(code)
     return php.strval(code)
 
 
