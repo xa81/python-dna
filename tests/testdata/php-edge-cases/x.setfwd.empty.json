@@ -1,0 +1,20 @@
+{
+    "id": "x.setfwd.empty",
+    "call": "setForwarding",
+    "args": [
+        "example.com",
+        "  ",
+        "Standard"
+    ],
+    "responses": [],
+    "requests": [],
+    "output": {
+        "result": "ERROR",
+        "error": {
+            "Code": "SET_FORWARD",
+            "Message": "Redirect address is required.",
+            "Details": "Redirect address is required."
+        }
+    },
+    "ignore": []
+}

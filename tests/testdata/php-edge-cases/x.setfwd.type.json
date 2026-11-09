@@ -1,0 +1,39 @@
+{
+    "id": "x.setfwd.type",
+    "call": "setForwarding",
+    "args": [
+        "example.com",
+        "http://x",
+        " frame "
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": ""
+        }
+    ],
+    "requests": [
+        {
+            "method": "POST",
+            "path": "domains/forwards",
+            "query": [],
+            "body": {
+                "domainName": "example.com",
+                "redirectAddress": "http://x",
+                "forwardType": "Frame"
+            },
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "OK",
+        "data": {
+            "RedirectAddress": "http://x",
+            "ForwardType": "Frame"
+        }
+    },
+    "ignore": []
+}

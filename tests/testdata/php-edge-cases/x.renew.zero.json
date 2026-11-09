@@ -1,0 +1,38 @@
+{
+    "id": "x.renew.zero",
+    "call": "renew",
+    "args": [
+        "example.com",
+        1
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"expirationDate\": \"0\"}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "POST",
+            "path": "domains/renew",
+            "query": [],
+            "body": {
+                "domainName": "example.com",
+                "period": 1
+            },
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "ERROR",
+        "error": {
+            "Code": "DOMAIN_RENEW",
+            "Message": "Invalid response received from server! Domain renew request could not be completed!",
+            "Details": "The domain renewal request failed to complete"
+        }
+    },
+    "ignore": []
+}

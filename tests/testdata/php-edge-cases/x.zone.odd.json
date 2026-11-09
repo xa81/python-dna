@@ -1,0 +1,63 @@
+{
+    "id": "x.zone.odd",
+    "call": "getResourceRecords",
+    "args": [
+        "example.com"
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"a\": {\"name\": \"x.example.com.\", \"type\": \"A\", \"ttl\": \"300\", \"records\": [{\"content\": \"1.2.3.4\", \"disabled\": 1}, \"bad\", {\"disabled\": 0}]}, \"b\": \"str\", \"c\": {\"records\": \"notarray\"}}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "GET",
+            "path": "domains/zones",
+            "query": {
+                "domainName": "example.com"
+            },
+            "body": null,
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "OK",
+        "data": {
+            "records": [
+                {
+                    "Name": "x.example.com.",
+                    "Type": "A",
+                    "TTL": 300,
+                    "Content": "1.2.3.4",
+                    "Disabled": true
+                },
+                {
+                    "Name": "x.example.com.",
+                    "Type": "A",
+                    "TTL": 300,
+                    "Content": "",
+                    "Disabled": false
+                },
+                {
+                    "Name": "x.example.com.",
+                    "Type": "A",
+                    "TTL": 300,
+                    "Content": "",
+                    "Disabled": false
+                },
+                {
+                    "Name": "",
+                    "Type": "",
+                    "TTL": 0,
+                    "Content": "",
+                    "Disabled": false
+                }
+            ]
+        }
+    },
+    "ignore": []
+}

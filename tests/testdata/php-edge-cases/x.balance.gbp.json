@@ -1,0 +1,38 @@
+{
+    "id": "x.balance.gbp",
+    "call": "getCurrentBalance",
+    "args": [
+        "gbp"
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"gbpBalance\": 2.675}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "GET",
+            "path": "deposit/accounts/me",
+            "query": {
+                "currency": "GBP"
+            },
+            "body": null,
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "ErrorCode": 0,
+        "OperationMessage": "Command completed succesfully.",
+        "OperationResult": "SUCCESS",
+        "Balance": "2.68",
+        "CurrencyId": 4,
+        "CurrencyInfo": null,
+        "CurrencyName": "GBP",
+        "CurrencySymbol": "£"
+    },
+    "ignore": []
+}

@@ -1,0 +1,20 @@
+{
+    "id": "x.setfwd.bad",
+    "call": "setForwarding",
+    "args": [
+        "example.com",
+        "http://x",
+        301
+    ],
+    "responses": [],
+    "requests": [],
+    "output": {
+        "result": "ERROR",
+        "error": {
+            "Code": "SET_FORWARD",
+            "Message": "Forward type \"301\" is not supported. Supported types: Standard, Frame.",
+            "Details": "Forward type \"301\" is not supported. Supported types: Standard, Frame."
+        }
+    },
+    "ignore": []
+}

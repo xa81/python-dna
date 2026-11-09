@@ -1,0 +1,64 @@
+{
+    "id": "x.reg.attrs",
+    "call": "registerWithContactInfo",
+    "args": [
+        "example.com",
+        1,
+        [],
+        [],
+        true,
+        false,
+        {
+            "A": true,
+            "B": null,
+            "C": [
+                1,
+                2
+            ],
+            "D": 2.5
+        }
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "null"
+        }
+    ],
+    "requests": [
+        {
+            "method": "POST",
+            "path": "domains/register-with-contacts",
+            "query": [],
+            "body": {
+                "domainName": "example.com",
+                "period": 1,
+                "nameServers": [
+                    "ns1.domainnameapi.com",
+                    "ns2.domainnameapi.com"
+                ],
+                "isLocked": true,
+                "privacyEnabled": false,
+                "contacts": [],
+                "tldAttributes": {
+                    "A": "true",
+                    "B": "",
+                    "C": "[1,2]",
+                    "D": "2.5"
+                }
+            },
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "ERROR",
+        "error": {
+            "Code": "RESPONSE",
+            "Message": "Invalid response received from server! Response is empty.",
+            "Details": "The API response is empty or null"
+        }
+    },
+    "ignore": []
+}

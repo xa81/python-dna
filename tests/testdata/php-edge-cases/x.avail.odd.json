@@ -1,0 +1,105 @@
+{
+    "id": "x.avail.odd",
+    "call": "checkAvailability",
+    "args": [
+        {
+            "a": "foo",
+            "b": "bar"
+        },
+        [
+            ".com",
+            "net"
+        ],
+        2,
+        "transfer"
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"infos\": [{\"domainName\": \"FOO.COM\", \"status\": \"Available\", \"price\": \"10.81\", \"currency\": \"USD\", \"period\": 1, \"isPremium\": true}, {\"domainName\": \"bar.com\", \"tld\": \"COM\", \"status\": 1, \"price\": 5}, {\"domainName\": \"foo.net\", \"status\": \"1.0\"}, {\"domainName\": \"x\", \"status\": true}, \"skip\", {\"status\": \"notavailable\", \"reason\": \"Domain exists\"}]}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "POST",
+            "path": "domains/bulk-search",
+            "query": [],
+            "body": [
+                {
+                    "domainName": "foo.com"
+                },
+                {
+                    "domainName": "foo.net"
+                },
+                {
+                    "domainName": "bar.com"
+                },
+                {
+                    "domainName": "bar.net"
+                }
+            ],
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": [
+        {
+            "TLD": "com",
+            "DomainName": "foo",
+            "Status": "available",
+            "Command": "transfer",
+            "Period": 1,
+            "IsFee": true,
+            "Price": "10.8100",
+            "Currency": "USD",
+            "Reason": null
+        },
+        {
+            "TLD": "com",
+            "DomainName": "bar",
+            "Status": "available",
+            "Command": "transfer",
+            "Period": 2,
+            "IsFee": false,
+            "Price": "5.0000",
+            "Currency": null,
+            "Reason": null
+        },
+        {
+            "TLD": "net",
+            "DomainName": "foo",
+            "Status": "available",
+            "Command": "transfer",
+            "Period": 2,
+            "IsFee": false,
+            "Price": null,
+            "Currency": null,
+            "Reason": null
+        },
+        {
+            "TLD": "",
+            "DomainName": "x",
+            "Status": "available",
+            "Command": "transfer",
+            "Period": 2,
+            "IsFee": false,
+            "Price": null,
+            "Currency": null,
+            "Reason": null
+        },
+        {
+            "TLD": "",
+            "DomainName": "",
+            "Status": "notavailable",
+            "Command": "transfer",
+            "Period": 2,
+            "IsFee": false,
+            "Price": null,
+            "Currency": null,
+            "Reason": "Domain exists"
+        }
+    ],
+    "ignore": []
+}

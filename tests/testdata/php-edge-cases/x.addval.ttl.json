@@ -1,0 +1,71 @@
+{
+    "id": "x.addval.ttl",
+    "call": "addResourceRecordValue",
+    "args": [
+        "example.com",
+        "mail",
+        "MX",
+        "20 mx2.example.com",
+        null,
+        false
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "[{\"name\": \"mail.example.com.\", \"type\": \"MX\", \"ttl\": 120, \"records\": [{\"content\": \"10 MX.example.com.\"}]}]"
+        },
+        {
+            "status": 200,
+            "body": ""
+        }
+    ],
+    "requests": [
+        {
+            "method": "GET",
+            "path": "domains/zones",
+            "query": {
+                "domainName": "example.com"
+            },
+            "body": null,
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        },
+        {
+            "method": "POST",
+            "path": "domains/zones",
+            "query": {
+                "domainName": "example.com"
+            },
+            "body": {
+                "zoneStruct": {
+                    "name": "mail",
+                    "ttl": 120,
+                    "type": "MX",
+                    "contents": [
+                        "10 MX.example.com.",
+                        "20 mx2.example.com"
+                    ]
+                }
+            },
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "OK",
+        "data": {
+            "Name": "mail",
+            "Type": "MX",
+            "TTL": 120,
+            "Contents": [
+                "10 MX.example.com.",
+                "20 mx2.example.com"
+            ]
+        }
+    },
+    "ignore": []
+}

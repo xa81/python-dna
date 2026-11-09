@@ -1,0 +1,50 @@
+{
+    "id": "x.check.list",
+    "call": "checkTransfer",
+    "args": [
+        "example.com",
+        "x"
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"transferAvailabilityStatus\": 0, \"messageKey\": \"K\", \"additionalAttributes\": [\"a\"]}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "POST",
+            "path": "domains/transfers/check",
+            "query": [],
+            "body": {
+                "domainName": "example.com",
+                "authCode": "x"
+            },
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "ERROR",
+        "data": {
+            "TransferAvailabilityStatus": false,
+            "AuthCodeIsRequired": false,
+            "AuthCodeIsValid": false,
+            "UserTransferRequired": false,
+            "TransferLock": false,
+            "Message": "",
+            "MessageKey": "K",
+            "Additional": [
+                "a"
+            ]
+        },
+        "error": {
+            "Code": "TRANSFER_NOT_AVAILABLE",
+            "Message": "Domain is not transferable",
+            "Details": "K"
+        }
+    },
+    "ignore": []
+}

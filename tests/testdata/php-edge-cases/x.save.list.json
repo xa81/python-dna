@@ -1,0 +1,119 @@
+{
+    "id": "x.save.list",
+    "call": "saveContacts",
+    "args": [
+        "example.com",
+        [
+            {
+                "FirstName": "A"
+            }
+        ]
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"contacts\": [{\"type\": \"ADMIN\", \"firstName\": \"A\", \"email\": \"e\"}, {\"type\": \"tech\"}]}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "PUT",
+            "path": "domains/contacts/update",
+            "query": [],
+            "body": {
+                "domainName": "example.com",
+                "contacts": [
+                    {
+                        "contactType": "0",
+                        "firstName": "A",
+                        "lastName": "A",
+                        "companyName": "",
+                        "eMail": "",
+                        "address": "Addres yok",
+                        "city": "ISTANBUL",
+                        "state": "ISTANBUL",
+                        "country": "TR",
+                        "postalCode": "34000",
+                        "phoneCountryCode": "90",
+                        "phone": "5555555555",
+                        "faxCountryCode": "",
+                        "fax": "",
+                        "isHidden": false
+                    }
+                ]
+            },
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "OK",
+        "data": {
+            "contacts": {
+                "Admin": {
+                    "ID": "",
+                    "Status": "Active",
+                    "AuthCode": "",
+                    "FirstName": "A",
+                    "LastName": "",
+                    "Company": "",
+                    "EMail": "e",
+                    "Type": "ADMIN",
+                    "Address": {
+                        "Line1": "",
+                        "Line2": "",
+                        "Line3": "",
+                        "State": "",
+                        "City": "",
+                        "Country": "",
+                        "ZipCode": ""
+                    },
+                    "Phone": {
+                        "Phone": {
+                            "Number": "",
+                            "CountryCode": ""
+                        },
+                        "Fax": {
+                            "Number": "",
+                            "CountryCode": ""
+                        }
+                    },
+                    "Additional": []
+                },
+                "Tech": {
+                    "ID": "",
+                    "Status": "Active",
+                    "AuthCode": "",
+                    "FirstName": "",
+                    "LastName": "",
+                    "Company": "",
+                    "EMail": "",
+                    "Type": "tech",
+                    "Address": {
+                        "Line1": "",
+                        "Line2": "",
+                        "Line3": "",
+                        "State": "",
+                        "City": "",
+                        "Country": "",
+                        "ZipCode": ""
+                    },
+                    "Phone": {
+                        "Phone": {
+                            "Number": "",
+                            "CountryCode": ""
+                        },
+                        "Fax": {
+                            "Number": "",
+                            "CountryCode": ""
+                        }
+                    },
+                    "Additional": []
+                }
+            }
+        }
+    },
+    "ignore": []
+}

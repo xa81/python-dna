@@ -1,0 +1,32 @@
+{
+    "id": "x.reseller.nores",
+    "call": "getResellerDetails",
+    "args": [],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"usdBalance\": 1}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "GET",
+            "path": "deposit/accounts/me",
+            "query": [],
+            "body": null,
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "ERROR",
+        "error": {
+            "Code": "CREDENTIALS",
+            "Message": "Invalid response format",
+            "Details": "Response does not contain required fields"
+        }
+    },
+    "ignore": []
+}

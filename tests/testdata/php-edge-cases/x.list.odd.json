@@ -1,0 +1,174 @@
+{
+    "id": "x.list.odd",
+    "call": "getList",
+    "args": [
+        {
+            "PageNumber": "1",
+            "OrderColumn": "Id",
+            "Extra": true
+        }
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"totalCount\": \"7\", \"items\": [{\"id\": \"12\", \"statusCode\": \"5\", \"statusText\": \"Grace\", \"status\": 2, \"lockStatus\": \"0\", \"privacyProtectionStatus\": \"false\", \"hosts\": [1], \"remainingDay\": \"3.9\", \"startDate\": \"2024-01-01\", \"expirationDate\": \"0001-01-01T00:00:00\", \"nameServers\": [\"a\"]}, {\"id\": 1.9, \"statusCode\": \"\", \"status\": \"19\", \"lockStatus\": 1}, {\"statusCode\": \"Active\"}, {\"status\": 7.0}]}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "GET",
+            "path": "domains",
+            "query": {
+                "MaxResultCount": "200",
+                "SkipCount": "200",
+                "Extra": "1",
+                "Sorting": "Id ASC"
+            },
+            "body": null,
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "data": {
+            "Domains": [
+                {
+                    "ID": 12,
+                    "Status": "Grace",
+                    "DomainName": "",
+                    "AuthCode": "",
+                    "LockStatus": "false",
+                    "PrivacyProtectionStatus": "true",
+                    "IsChildNameServer": "true",
+                    "Contacts": {
+                        "Billing": {
+                            "ID": ""
+                        },
+                        "Technical": {
+                            "ID": ""
+                        },
+                        "Administrative": {
+                            "ID": ""
+                        },
+                        "Registrant": {
+                            "ID": ""
+                        }
+                    },
+                    "Dates": {
+                        "Start": "2024-01-01T00:00:00",
+                        "Expiration": "0001-01-01T00:00:00",
+                        "RemainingDays": 3
+                    },
+                    "NameServers": [
+                        "a"
+                    ],
+                    "Additional": [],
+                    "ChildNameServers": []
+                },
+                {
+                    "ID": 1,
+                    "Status": "PendingRestore",
+                    "DomainName": "",
+                    "AuthCode": "",
+                    "LockStatus": "true",
+                    "PrivacyProtectionStatus": "false",
+                    "IsChildNameServer": "false",
+                    "Contacts": {
+                        "Billing": {
+                            "ID": ""
+                        },
+                        "Technical": {
+                            "ID": ""
+                        },
+                        "Administrative": {
+                            "ID": ""
+                        },
+                        "Registrant": {
+                            "ID": ""
+                        }
+                    },
+                    "Dates": {
+                        "Start": "",
+                        "Expiration": "",
+                        "RemainingDays": 0
+                    },
+                    "NameServers": [],
+                    "Additional": [],
+                    "ChildNameServers": []
+                },
+                {
+                    "ID": 0,
+                    "Status": "Active",
+                    "DomainName": "",
+                    "AuthCode": "",
+                    "LockStatus": "false",
+                    "PrivacyProtectionStatus": "false",
+                    "IsChildNameServer": "false",
+                    "Contacts": {
+                        "Billing": {
+                            "ID": ""
+                        },
+                        "Technical": {
+                            "ID": ""
+                        },
+                        "Administrative": {
+                            "ID": ""
+                        },
+                        "Registrant": {
+                            "ID": ""
+                        }
+                    },
+                    "Dates": {
+                        "Start": "",
+                        "Expiration": "",
+                        "RemainingDays": 0
+                    },
+                    "NameServers": [],
+                    "Additional": [],
+                    "ChildNameServers": []
+                },
+                {
+                    "ID": 0,
+                    "Status": "PendingDelete",
+                    "DomainName": "",
+                    "AuthCode": "",
+                    "LockStatus": "false",
+                    "PrivacyProtectionStatus": "false",
+                    "IsChildNameServer": "false",
+                    "Contacts": {
+                        "Billing": {
+                            "ID": ""
+                        },
+                        "Technical": {
+                            "ID": ""
+                        },
+                        "Administrative": {
+                            "ID": ""
+                        },
+                        "Registrant": {
+                            "ID": ""
+                        }
+                    },
+                    "Dates": {
+                        "Start": "",
+                        "Expiration": "",
+                        "RemainingDays": 0
+                    },
+                    "NameServers": [],
+                    "Additional": [],
+                    "ChildNameServers": []
+                }
+            ]
+        },
+        "result": "OK",
+        "TotalCount": 7
+    },
+    "ignore": [
+        "data.Domains.0.Dates.RemainingDays",
+        "data.Domains.1.Dates.RemainingDays",
+        "data.Domains.2.Dates.RemainingDays",
+        "data.Domains.3.Dates.RemainingDays"
+    ]
+}

@@ -1,0 +1,131 @@
+{
+    "id": "x.reg.tr",
+    "call": "registerWithContactInfo",
+    "args": [
+        "EXAMPLE.COM.TR",
+        1,
+        {
+            "registrant": {
+                "FirstName": "Ali",
+                "Phone": {
+                    "Phone": {
+                        "Number": "0532 111 22 33",
+                        "CountryCode": "90"
+                    },
+                    "Fax": {
+                        "Number": "+90 212 000 00 00",
+                        "CountryCode": ""
+                    }
+                },
+                "Address": {
+                    "Line1": "L1",
+                    "City": "Izmir",
+                    "Country": "turkiye"
+                },
+                "IsHidden": "1"
+            }
+        },
+        [
+            "",
+            ""
+        ],
+        "1",
+        0,
+        {
+            "TRABISDOMAINCATEGORY": "Individual",
+            "TRABISCITIZENID": 11111111111,
+            "TRABISTAXOFFICE": null,
+            "X": [
+                1
+            ]
+        }
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"id\": 1, \"status\": \"Active\", \"expirationDate\": \"2030-01-01T00:00:00Z\", \"remainingDay\": \"5\"}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "POST",
+            "path": "domains/register-with-contacts",
+            "query": [],
+            "body": {
+                "domainName": "EXAMPLE.COM.TR",
+                "period": 1,
+                "nameServers": [
+                    "ns1.domainnameapi.com",
+                    "ns2.domainnameapi.com"
+                ],
+                "isLocked": "1",
+                "privacyEnabled": 0,
+                "contacts": [
+                    {
+                        "contactType": "Registrant",
+                        "firstName": "Ali",
+                        "lastName": "Ali",
+                        "companyName": "",
+                        "eMail": "",
+                        "address": "L1",
+                        "city": "Izmir",
+                        "state": "Izmir",
+                        "country": "TR",
+                        "postalCode": "34000",
+                        "phoneCountryCode": "90",
+                        "phone": "5321112233",
+                        "faxCountryCode": "90",
+                        "fax": "2120000000",
+                        "isHidden": true
+                    }
+                ],
+                "tldAttributes": {
+                    "TRABISDOMAINCATEGORY": "Owner",
+                    "TRABISCITIZENID": "11111111111",
+                    "TRABISTAXOFFICE": ""
+                }
+            },
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "data": {
+            "ID": 1,
+            "Status": "Active",
+            "DomainName": "",
+            "AuthCode": "",
+            "LockStatus": "false",
+            "PrivacyProtectionStatus": "false",
+            "IsChildNameServer": "false",
+            "Contacts": {
+                "Billing": {
+                    "ID": 0
+                },
+                "Technical": {
+                    "ID": 0
+                },
+                "Administrative": {
+                    "ID": 0
+                },
+                "Registrant": {
+                    "ID": 0
+                }
+            },
+            "Dates": {
+                "Start": "",
+                "Expiration": "2030-01-01T00:00:00",
+                "RemainingDays": 5
+            },
+            "NameServers": [],
+            "Additional": [],
+            "ChildNameServers": []
+        },
+        "result": "OK"
+    },
+    "ignore": [
+        "data.Dates.RemainingDays"
+    ]
+}

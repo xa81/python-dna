@@ -1,0 +1,74 @@
+{
+    "id": "x.details.odd",
+    "call": "getDetails",
+    "args": [
+        "example.com"
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"id\": \"77abc\", \"status\": \"9\", \"name\": \"n.com\", \"eppCode\": \"E\", \"lockStatus\": \"0\", \"hosts\": {\"h\": {\"name\": \"ns1\", \"ipAddresses\": [{\"ipAddress\": \"1.1.1.1\"}]}}, \"nameservers\": {\"x\": \"ns1\", \"y\": 5}, \"additionalAttributes\": \"scalar\", \"contacts\": [{\"ContactType\": \"Admin\", \"id\": 5}, {\"contactType\": \"Tech\"}, {\"contactType\": \"Other\", \"handle\": \"h\"}], \"expirationDate\": \"2020-01-01T00:00:00\"}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "GET",
+            "path": "domains/info",
+            "query": {
+                "DomainName": "example.com"
+            },
+            "body": null,
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "data": {
+            "ID": 77,
+            "Status": "ConfirmationEmailSend",
+            "DomainName": "n.com",
+            "AuthCode": "E",
+            "LockStatus": "false",
+            "PrivacyProtectionStatus": "false",
+            "IsChildNameServer": "true",
+            "Contacts": {
+                "Billing": {
+                    "ID": 0
+                },
+                "Technical": {
+                    "ID": 0
+                },
+                "Administrative": {
+                    "ID": 5
+                },
+                "Registrant": {
+                    "ID": 0
+                }
+            },
+            "Dates": {
+                "Start": "",
+                "Expiration": "2020-01-01T00:00:00",
+                "RemainingDays": 0
+            },
+            "NameServers": {
+                "x": "ns1",
+                "y": "5"
+            },
+            "Additional": [
+                "scalar"
+            ],
+            "ChildNameServers": {
+                "h": {
+                    "ns": "ns1",
+                    "ip": "1.1.1.1"
+                }
+            }
+        },
+        "result": "OK"
+    },
+    "ignore": [
+        "data.Dates.RemainingDays"
+    ]
+}

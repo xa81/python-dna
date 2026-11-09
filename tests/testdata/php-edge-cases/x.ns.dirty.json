@@ -1,0 +1,48 @@
+{
+    "id": "x.ns.dirty",
+    "call": "modifyNameServer",
+    "args": [
+        "example.com",
+        {
+            "a": " NS1.Example.COM. ",
+            "b": "ns1.example.com",
+            "c": 5,
+            "d": ""
+        }
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"other\": 1}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "PUT",
+            "path": "domains/dns/name-server",
+            "query": [],
+            "body": {
+                "domainName": "example.com",
+                "nameServers": [
+                    "ns1.example.com"
+                ]
+            },
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "OK",
+        "data": {
+            "NameServers": {
+                "a": " NS1.Example.COM. ",
+                "b": "ns1.example.com",
+                "c": 5,
+                "d": ""
+            }
+        }
+    },
+    "ignore": []
+}

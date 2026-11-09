@@ -1,0 +1,92 @@
+{
+    "id": "x.tld.odd",
+    "call": "getTldList",
+    "args": [
+        "5"
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": "{\"items\": [{\"name\": \"com\", \"status\": \"Passive\", \"constraints\": {\"maxLenght\": 60, \"minLength\": 2}, \"prices\": [{\"register\": [{\"period\": 2, \"price\": \"20.5\", \"currency\": \"USD\"}, {\"period\": 0, \"price\": 9.999, \"currency\": \"USD\"}, {\"period\": 1}], \"renew\": {\"period\": 1, \"price\": 12}, \"transfer\": \"bad\", \"restore\": [], \"refund\": {\"price\": \"x\"}}]}, {\"name\": \"net\", \"prices\": []}, {\"name\": \"org\", \"prices\": {\"0\": {\"register\": {\"period\": \"3\", \"price\": 1.005}}}}]}"
+        }
+    ],
+    "requests": [
+        {
+            "method": "GET",
+            "path": "products/tlds",
+            "query": {
+                "MaxResultCount": "5",
+                "SkipCount": "0"
+            },
+            "body": null,
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "data": [
+            {
+                "id": 1,
+                "status": "Passive",
+                "maxchar": 60,
+                "maxperiod": 10,
+                "minchar": 2,
+                "minperiod": 1,
+                "tld": "com",
+                "pricing": {
+                    "registration": {
+                        "1": "0.0000",
+                        "2": "20.5000"
+                    },
+                    "renew": {
+                        "1": "12.0000"
+                    },
+                    "restore": {
+                        "1": "0.0000"
+                    },
+                    "refund": {
+                        "1": "0.0000"
+                    }
+                },
+                "currencies": {
+                    "registration": "",
+                    "renew": "",
+                    "restore": "",
+                    "refund": ""
+                }
+            },
+            {
+                "id": 2,
+                "status": "Active",
+                "maxchar": 63,
+                "maxperiod": 10,
+                "minchar": 1,
+                "minperiod": 1,
+                "tld": "net",
+                "pricing": [],
+                "currencies": []
+            },
+            {
+                "id": 3,
+                "status": "Active",
+                "maxchar": 63,
+                "maxperiod": 10,
+                "minchar": 1,
+                "minperiod": 1,
+                "tld": "org",
+                "pricing": {
+                    "registration": {
+                        "3": "1.0050"
+                    }
+                },
+                "currencies": {
+                    "registration": ""
+                }
+            }
+        ],
+        "result": "OK"
+    },
+    "ignore": []
+}

@@ -1,0 +1,58 @@
+{
+    "id": "x.add.list",
+    "call": "addResourceRecord",
+    "args": [
+        "example.com",
+        "@",
+        "a",
+        [
+            "1.1.1.1",
+            2
+        ],
+        90000,
+        "0"
+    ],
+    "responses": [
+        {
+            "status": 200,
+            "body": ""
+        }
+    ],
+    "requests": [
+        {
+            "method": "POST",
+            "path": "domains/zones",
+            "query": {
+                "domainName": "example.com"
+            },
+            "body": {
+                "zoneStruct": {
+                    "name": "",
+                    "ttl": 86400,
+                    "type": "A",
+                    "contents": [
+                        "1.1.1.1",
+                        "2"
+                    ]
+                }
+            },
+            "headers": {
+                "X-API-KEY": "conformance-api-key",
+                "__reseller": "00000000-0000-4000-8000-000000000001"
+            }
+        }
+    ],
+    "output": {
+        "result": "OK",
+        "data": {
+            "Name": "",
+            "Type": "a",
+            "TTL": 90000,
+            "Content": [
+                "1.1.1.1",
+                2
+            ]
+        }
+    },
+    "ignore": []
+}
